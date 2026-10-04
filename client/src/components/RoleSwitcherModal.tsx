@@ -39,7 +39,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
 
   // Admin form state
   const [adminId, setAdminId] = useState("admin");
-  const [adminPass, setAdminPass] = useState("admin123");
+  const [adminPass, setAdminPass] = useState("112146");
 
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -395,7 +395,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                     type="password"
                     value={adminPass}
                     onChange={(e) => setAdminPass(e.target.value)}
-                    placeholder="Master password (admin123)"
+                    placeholder="Master password (112146)"
                     className="pl-9 text-xs bg-[#faf8f2] border-[#ded9cb]"
                     required
                   />
@@ -408,12 +408,12 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                   type="button"
                   onClick={() => {
                     setAdminId("admin");
-                    setAdminPass("admin123");
+                    setAdminPass("112146");
                     setErrorMsg("");
                   }}
                   className="text-[11px] text-[#33409a] font-semibold hover:underline cursor-pointer"
                 >
-                  Autofill Master Admin Credentials (admin / admin123)
+                  Autofill Master Admin Credentials (admin / 112146)
                 </button>
               </div>
 

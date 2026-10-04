@@ -183,10 +183,10 @@ export const DEMO_USERS: User[] = [
 
 const CREDENTIALS_MAP: Record<string, { pass: string; user: User }> = {
   // Admin credentials
-  coordinator: { pass: "admin123", user: DEMO_USERS[0] },
-  admin: { pass: "admin123", user: DEMO_USERS[1] },
-  dean: { pass: "dean2025", user: DEMO_USERS[2] },
-  hod_cse: { pass: "cse123", user: DEMO_USERS[3] },
+  coordinator: { pass: "112146", user: DEMO_USERS[0] },
+  admin: { pass: "112146", user: DEMO_USERS[1] },
+  dean: { pass: "112146", user: DEMO_USERS[2] },
+  hod_cse: { pass: "112146", user: DEMO_USERS[3] },
 
   // Faculty credentials
   dr_punyasamudran: { pass: "faculty123", user: DEMO_USERS[5] },
@@ -320,7 +320,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check Master Admin credentials
     const validAdminIdentifiers = ["admin", "9999999999", "coordinator", "master", "nitin"];
-    const validAdminPasswords = ["admin123", "admin@jain2026", "master2026"];
+    const validAdminPasswords = ["112146", "admin123", "admin@jain2026", "master2026"];
 
     if (validAdminIdentifiers.includes(id) && validAdminPasswords.includes(cleanPass)) {
       const adminUser: User = {

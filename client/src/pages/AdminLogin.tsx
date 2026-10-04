@@ -233,7 +233,7 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
                   </label>
                   <Input
                     type="password"
-                    placeholder="Enter master password (admin123)"
+                    placeholder="Enter master password (112146)"
                     value={adminPass}
                     onChange={(e) => setAdminPass(e.target.value)}
                     className="text-xs bg-[#faf8f2] border-[#ded9cc]"
@@ -246,12 +246,12 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
                     type="button"
                     onClick={() => {
                       setAdminId("admin");
-                      setAdminPass("admin123");
+                      setAdminPass("112146");
                       setError("");
                     }}
                     className="text-[11px] text-[#33409a] font-semibold hover:underline"
                   >
-                    Autofill: admin / admin123
+                    Autofill: admin / 112146
                   </button>
                 </div>
 
