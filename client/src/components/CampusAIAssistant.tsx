@@ -342,9 +342,15 @@ export function CampusAIAssistant({
                               <span className="flex items-center gap-1">
                                 <MapPin className="w-3 h-3 text-slate-400" />
                                 <button
-                                  onClick={() => onNavigateToView && onNavigateToView("floor-plan", sess.room)}
-                                  className="text-[#33409A] hover:underline font-medium"
-                                  title="View room in Floor Plan"
+                                  type="button"
+                                  onClick={() => {
+                                    if (onNavigateToView) {
+                                      onNavigateToView("floor-plan", sess.room);
+                                      setIsOpen(false);
+                                    }
+                                  }}
+                                  className="text-[#33409A] hover:underline font-bold cursor-pointer"
+                                  title="Locate room on CAD Blueprint"
                                 >
                                   {sess.room}
                                 </button>
@@ -385,14 +391,38 @@ export function CampusAIAssistant({
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => onNavigateToView("floor-plan", String(m.actionData?.room?.floor ?? 0))}
-                              className="h-6 text-[10px] border-[#33409A] text-[#33409A] hover:bg-[#33409A] hover:text-white px-2"
+                              onClick={() => {
+                                onNavigateToView("floor-plan", m.actionData?.room?.code || String(m.actionData?.room?.floor ?? 0));
+                                setIsOpen(false);
+                              }}
+                              className="h-6 text-[10px] border-[#33409A] text-[#33409A] hover:bg-[#33409A] hover:text-white px-2 cursor-pointer font-semibold"
                             >
                               Open Floor Plan
                               <ChevronRight className="w-3 h-3 ml-0.5" />
                             </Button>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Action Cards: Standalone Navigation Target */}
+                    {m.actionData?.navigationTarget && !m.actionData.room && onNavigateToView && (
+                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            onNavigateToView(
+                              m.actionData!.navigationTarget!.view,
+                              m.actionData!.navigationTarget!.param
+                            );
+                            setIsOpen(false);
+                          }}
+                          className="h-7 text-xs bg-[#33409A] hover:bg-[#273277] text-white px-3 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <Building className="w-3.5 h-3.5 text-[#E3A62F]" />
+                          <span>Open CAD Floor Plan</span>
+                          <ChevronRight className="w-3 h-3 ml-0.5" />
+                        </Button>
                       </div>
                     )}
 

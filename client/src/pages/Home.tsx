@@ -822,11 +822,24 @@ export default function Home() {
         onOpenChange={setIsAIOpen}
         onNavigateToView={(targetView, param) => {
           if (targetView === "floor-plan") {
-            handleSetView("floor-plan");
+            if (param) {
+              const asFloor = parseInt(param, 10);
+              if (!isNaN(asFloor) && asFloor >= 0 && asFloor <= 4 && !param.includes("-") && !/[a-zA-Z]/.test(param)) {
+                setTargetFloorPlanFloor(asFloor);
+                setTargetFloorPlanRoom(null);
+                handleSetView("floor-plan");
+              } else {
+                handleLocateRoomOnCAD(param);
+              }
+            } else {
+              handleSetView("floor-plan");
+            }
           } else if (targetView === "faculty") {
             handleSetView("faculty");
+            if (param) setQuery(param);
           } else if (targetView === "student") {
             handleSetView("student");
+            if (param) setQuery(param);
           } else if (targetView === "roomware") {
             handleSetView("roomware");
           }

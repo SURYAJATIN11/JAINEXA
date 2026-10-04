@@ -1989,37 +1989,87 @@ export function findBuildingRoomByCodeOrName(rawRoom: string): { room: BuildingR
   if (!rawRoom) return null;
   const clean = rawRoom.toUpperCase().trim();
 
-  // Extract room number digits (e.g. 214, 126, 116, 215, 212, 113, etc.)
-  const numMatch = clean.match(/([A-Z]?-?(\d{3})[A-Z]?)/);
+  // Extract room number digits (e.g. 214, 126, 116, 215, 212, 113, 002, 007, etc.)
+  const numMatch = clean.match(/(?:ROOM|LAB|HALL|A-|B-|\b)?\s*([A-Z]?-?(\d{3})[A-Z]?)/i);
   const roomNum = numMatch ? numMatch[2] : "";
   const firstDigit = roomNum ? parseInt(roomNum[0], 10) : null;
 
-  // 1. Direct code or name match across all floors
+  // 1. If 3-digit number found, search for rooms containing this number on matching floor
+  if (roomNum) {
+    for (const floor of CAMPUS_FLOORS) {
+      for (const r of floor.rooms) {
+        const rCodeClean = r.code.toUpperCase().replace(/[-\s]/g, "");
+        if (rCodeClean.includes(roomNum) || r.id.toUpperCase().includes(roomNum) || r.name.toUpperCase().includes(roomNum)) {
+          return { room: r, floorNumber: floor.floorNumber };
+        }
+      }
+    }
+  }
+
+  // 2. Direct code or name match across all floors
   for (const floor of CAMPUS_FLOORS) {
     for (const r of floor.rooms) {
       const rCode = r.code.toUpperCase().replace(/[-\s]/g, "");
       const cleanNoDash = clean.replace(/[-\s]/g, "");
-      if (cleanNoDash.includes(rCode) || (roomNum && rCode.includes(roomNum))) {
+      if (
+        cleanNoDash.includes(rCode) ||
+        rCode.includes(cleanNoDash) ||
+        clean.includes(r.name.toUpperCase()) ||
+        r.name.toUpperCase().includes(clean)
+      ) {
         return { room: r, floorNumber: floor.floorNumber };
       }
     }
   }
 
-  // 2. Check for textual floor indicators (e.g., "2nd Floor Open Lab")
-  if (/2nd\s*Floor/i.test(clean)) {
-    const f2 = CAMPUS_FLOORS.find((f) => f.floorNumber === 2);
-    if (f2 && f2.rooms.length > 0) {
-      return { room: f2.rooms[0], floorNumber: 2 };
-    }
-  }
-  if (/1st\s*Floor/i.test(clean)) {
-    const f1 = CAMPUS_FLOORS.find((f) => f.floorNumber === 1);
-    if (f1 && f1.rooms.length > 0) {
-      return { room: f1.rooms[0], floorNumber: 1 };
+  // 3. Match common named campus areas (Seminar Hall, Amphitheatre, Labs, etc.)
+  const areaKeywords = [
+    { kw: "SEMINAR", code: "A-002" },
+    { kw: "AMPHITHEATRE", code: "A-008" },
+    { kw: "CHEMISTRY", code: "B-012" },
+    { kw: "PHYSICS", code: "B-011" },
+    { kw: "ADMIN", code: "A-001" },
+    { kw: "VICE CHANCELLOR", code: "A-007" },
+    { kw: "COMPUTING", code: "A-108" },
+    { kw: "MICROPROCESSOR", code: "A-215" },
+    { kw: "MICROCONTROLLER", code: "A-215" },
+    { kw: "NETWORKS", code: "A-312" },
+    { kw: "AI LAB", code: "A-404" },
+    { kw: "ROBOTICS", code: "A-405" },
+  ];
+
+  for (const { kw, code } of areaKeywords) {
+    if (clean.includes(kw)) {
+      for (const floor of CAMPUS_FLOORS) {
+        const found = floor.rooms.find((r) => r.code === code);
+        if (found) return { room: found, floorNumber: floor.floorNumber };
+      }
     }
   }
 
-  // 3. Fallback: Infer floor by first digit of 3-digit room number (2xx -> Floor 2, 1xx -> Floor 1, 3xx -> Floor 3)
+  // 4. Check for textual floor indicators (e.g., "2nd Floor", "Ground Floor")
+  if (/2nd\s*Floor|Floor\s*2|Level\s*2/i.test(clean)) {
+    const f2 = CAMPUS_FLOORS.find((f) => f.floorNumber === 2);
+    if (f2 && f2.rooms.length > 0) return { room: f2.rooms[0], floorNumber: 2 };
+  }
+  if (/1st\s*Floor|Floor\s*1|Level\s*1/i.test(clean)) {
+    const f1 = CAMPUS_FLOORS.find((f) => f.floorNumber === 1);
+    if (f1 && f1.rooms.length > 0) return { room: f1.rooms[0], floorNumber: 1 };
+  }
+  if (/3rd\s*Floor|Floor\s*3|Level\s*3/i.test(clean)) {
+    const f3 = CAMPUS_FLOORS.find((f) => f.floorNumber === 3);
+    if (f3 && f3.rooms.length > 0) return { room: f3.rooms[0], floorNumber: 3 };
+  }
+  if (/4th\s*Floor|Floor\s*4|Level\s*4/i.test(clean)) {
+    const f4 = CAMPUS_FLOORS.find((f) => f.floorNumber === 4);
+    if (f4 && f4.rooms.length > 0) return { room: f4.rooms[0], floorNumber: 4 };
+  }
+  if (/Ground\s*Floor|Floor\s*0|Level\s*0/i.test(clean)) {
+    const f0 = CAMPUS_FLOORS.find((f) => f.floorNumber === 0);
+    if (f0 && f0.rooms.length > 0) return { room: f0.rooms[0], floorNumber: 0 };
+  }
+
+  // 5. Fallback: Infer floor by first digit of 3-digit room number
   if (firstDigit !== null && firstDigit >= 0 && firstDigit <= 4) {
     const targetFloor = CAMPUS_FLOORS.find((f) => f.floorNumber === firstDigit);
     if (targetFloor && targetFloor.rooms.length > 0) {

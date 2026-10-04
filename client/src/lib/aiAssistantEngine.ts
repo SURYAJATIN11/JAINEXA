@@ -8,7 +8,8 @@ import {
   getAllClassTeachers,
   CollegeBatch,
 } from "@/data/collegeData";
-import { CAMPUS_FLOORS, BuildingRoom } from "@/data/floorPlanData";
+import { CAMPUS_FLOORS, BuildingRoom, findBuildingRoomByCodeOrName } from "@/data/floorPlanData";
+import { OFFICIAL_CSE_GEN_3_F_SESSIONS } from "@/lib/timetableStore";
 import { User } from "@/contexts/AuthContext";
 
 export interface SessionItem {
@@ -154,6 +155,10 @@ export function resolveFacultyKey(user: User | null): string | null {
 }
 
 export function findRoomDetails(query: string): BuildingRoom | null {
+  if (!query) return null;
+  const resolved = findBuildingRoomByCodeOrName(query);
+  if (resolved) return resolved.room;
+
   const clean = query.trim().toUpperCase();
   for (const floor of CAMPUS_FLOORS) {
     for (const room of floor.rooms) {
@@ -570,51 +575,129 @@ You have **${freeSlots.length} free slot(s)** today (${todayName}):`,
     }
   }
 
-  // 6. ROOM LOOKUP & LOCATION ("where is room 204", "location of lab 2")
-  if (q.includes("room") || q.includes("lab") || q.includes("hall") || q.includes("where is")) {
-    const roomMatch = q.match(/(?:room|lab|hall)?\s*([a-z0-9-]+)/i);
-    const candidateQuery = roomMatch ? roomMatch[1] : q;
+  // 6A. DIRECT FLOOR PLAN & ARCHITECTURAL CAD BLUEPRINT NAVIGATION
+  if (
+    q.includes("floor plan") ||
+    q.includes("blueprint") ||
+    q.includes("cad map") ||
+    q.includes("campus map") ||
+    /^(?:show|open|go to|view)\s+(?:ground|1st|2nd|3rd|4th|floor\s*\d|level\s*\d)/i.test(q) ||
+    /^(?:floor\s*\d|level\s*\d)$/i.test(q)
+  ) {
+    let targetFloorNum = 0;
+    if (q.includes("1st") || q.includes("floor 1") || q.includes("level 1")) targetFloorNum = 1;
+    else if (q.includes("2nd") || q.includes("floor 2") || q.includes("level 2")) targetFloorNum = 2;
+    else if (q.includes("3rd") || q.includes("floor 3") || q.includes("level 3")) targetFloorNum = 3;
+    else if (q.includes("4th") || q.includes("floor 4") || q.includes("level 4")) targetFloorNum = 4;
+    else if (q.includes("ground") || q.includes("floor 0") || q.includes("level 0")) targetFloorNum = 0;
 
-    for (const floor of CAMPUS_FLOORS) {
-      for (const room of floor.rooms) {
-        if (
-          q.includes(room.code.toLowerCase()) ||
-          q.includes(room.name.toLowerCase()) ||
-          room.code.toLowerCase() === candidateQuery.toLowerCase()
-        ) {
-          return {
-            id: crypto.randomUUID(),
-            sender: "assistant",
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            text: `### 📍 Room Location: ${room.name} (${room.code})
+    const targetFloor = CAMPUS_FLOORS.find((f) => f.floorNumber === targetFloorNum) || CAMPUS_FLOORS[0];
+
+    return {
+      id: crypto.randomUUID(),
+      sender: "assistant",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      text: `### 🗺️ ${targetFloor.levelTitle}
+${targetFloor.subtitle}
+
+- **Total Rooms**: **${targetFloor.totalRooms} rooms**
+- **Floor Area**: **${targetFloor.totalAreaSqm.toLocaleString()} m²**
+- **Highlights**: ${targetFloor.highlights.join(" · ")}
+
+Click below to open and navigate the CAD Architectural Blueprint for ${targetFloor.shortName}:`,
+      actionData: {
+        type: "navigation",
+        title: `Floor ${targetFloorNum} · CAD Blueprint`,
+        navigationTarget: {
+          view: "floor-plan",
+          param: String(targetFloorNum),
+        },
+      },
+    };
+  }
+
+  // 6B. ROOM LOOKUP & LOCATION ("where is room 215b", "room 204", "location of lab 2")
+  const resolvedRoomInfo = findBuildingRoomByCodeOrName(rawQuery);
+  const isExplicitRoomIntent =
+    q.includes("room") ||
+    q.includes("where is") ||
+    q.includes("location") ||
+    q.includes("which floor") ||
+    q.includes("how to find") ||
+    q.includes("how to reach") ||
+    q.includes("located") ||
+    q.includes("hall") ||
+    /\b\d{3}[a-z]?\b/i.test(q) ||
+    /\b[a-z]-\d{3}\b/i.test(q);
+
+  if (resolvedRoomInfo && (isExplicitRoomIntent || q.length < 20)) {
+    const { room, floorNumber } = resolvedRoomInfo;
+    const floor = CAMPUS_FLOORS.find((f) => f.floorNumber === floorNumber) || CAMPUS_FLOORS[0];
+
+    return {
+      id: crypto.randomUUID(),
+      sender: "assistant",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      text: `### 📍 Room Location: ${room.name} (${room.code})
 - **Floor**: **${floor.levelTitle}**
 - **Building Block**: **${room.block}**
 - **Category**: ${room.category.toUpperCase()}
 - **Seating Capacity**: **${room.capacity} seats** (${room.areaSqm} m²)
 - **Facilities**: ${room.facilities.join(", ")}
-- **Description**: ${room.description}`,
-            actionData: {
-              type: "room",
-              room,
-              navigationTarget: {
-                view: "floor-plan",
-                param: String(floor.floorNumber),
-              },
-            },
-          };
-        }
-      }
-    }
+- **Description**: ${room.description}
+
+Click **Open Floor Plan** below to locate this room on the architectural CAD layout:`,
+      actionData: {
+        type: "room",
+        room,
+        navigationTarget: {
+          view: "floor-plan",
+          param: room.code,
+        },
+      },
+    };
   }
 
   // 7. WHO TEACHES [SUBJECT]
-  if (q.includes("who teaches") || q.includes("faculty for") || q.includes("teacher for") || q.includes("professor for")) {
+  if (
+    q.includes("who teaches") ||
+    q.includes("faculty for") ||
+    q.includes("teacher for") ||
+    q.includes("professor for") ||
+    q.includes("who takes") ||
+    q.includes("who is teaching")
+  ) {
     const cleanSubQuery = q
       .replace(/who teaches/i, "")
       .replace(/faculty for/i, "")
       .replace(/teacher for/i, "")
       .replace(/professor for/i, "")
+      .replace(/who takes/i, "")
+      .replace(/who is teaching/i, "")
       .trim();
+
+    // Check Official Section F schedule first
+    const sessionMatch = OFFICIAL_CSE_GEN_3_F_SESSIONS.find(
+      (s) =>
+        s.subject.toLowerCase().includes(cleanSubQuery) ||
+        s.code.toLowerCase().includes(cleanSubQuery) ||
+        cleanSubQuery.includes(s.subject.toLowerCase()) ||
+        cleanSubQuery.includes(s.code.toLowerCase())
+    );
+
+    if (sessionMatch) {
+      return {
+        id: crypto.randomUUID(),
+        sender: "assistant",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        text: `### Subject Faculty Assignment
+For **${studentBatch.program} Section ${studentBatch.section}**:
+
+- **Subject**: **${sessionMatch.subject}** (${sessionMatch.code})
+- **Faculty**: **${sessionMatch.faculty}**
+- **Classroom / Studio**: **Room ${sessionMatch.room}** (Floor 2)`,
+      };
+    }
 
     const batch = collegeBatches[studentBatch.key];
     const foundInBatch = (batch?.subjects as any[] || []).filter(
@@ -658,28 +741,31 @@ ${listText}`,
         text: `Found subject(s) in the college catalog:
 ${listText}
 
-*(Tip: Inquire about a specific batch like "Who teaches Chemistry in CSE-GEN F?" for exact faculty assignments.)*`,
+*(Tip: Inquire about a specific batch like "Who teaches Operating Systems?" for exact faculty assignments.)*`,
       };
     }
   }
 
   // 8. CLASS TEACHER LOOKUP
-  if (q.includes("class teacher") || q.includes("mentor") || q.includes("coordinator")) {
+  if (q.includes("class teacher") || q.includes("mentor") || q.includes("coordinator") || q.includes("counselor") || q.includes("incharge")) {
     const classTeachers = getAllClassTeachers();
     const myClassTeacher = classTeachers.find((ct) => ct.key === studentBatch.key);
 
-    if (myClassTeacher) {
-      return {
-        id: crypto.randomUUID(),
-        sender: "assistant",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        text: `### 🎓 Class Teacher
+    const teacherName = myClassTeacher?.classTeacher || "Dr. Suriya Prakash J";
+    const teacherRoom = "Room 215A / Block A Faculty Chamber";
+
+    return {
+      id: crypto.randomUUID(),
+      sender: "assistant",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      text: `### 🎓 Class Teacher & Mentor
 The designated Class Teacher for **${studentBatch.program} Sem ${studentBatch.semester} Section ${studentBatch.section}** is:
 
-👉 **${myClassTeacher.classTeacher}**
-Departmental office is located in Block A.`,
-      };
-    }
+👉 **${teacherName}**
+- **Classroom / Base**: **${teacherRoom}**
+- **Role**: Cohort Academic Mentor & Class Incharge
+- **Department**: Department of Computer Science & Engineering`,
+    };
   }
 
   // 9. FACULTY SEARCH / FACULTY TIMETABLE LOOKUP
@@ -708,7 +794,39 @@ Departmental office is located in Block A.`,
   }
 
   // 10. LAB SESSIONS LOOKUP
-  if (q.includes("lab") || q.includes("practical")) {
+  if (q.includes("lab session") || q.includes("when are our labs") || q.includes("lab timetable") || (q.includes("lab") && !q.includes("where is"))) {
+    const secFLabs = OFFICIAL_CSE_GEN_3_F_SESSIONS.filter((s) => s.type === "Lab");
+    if (secFLabs.length > 0 && studentBatch.key === "CSE-GEN|3|F") {
+      const list = secFLabs
+        .map((s) => `- **${s.day}** (${s.note || `Slot ${s.slot + 1}`}): **${s.subject}** (${s.code}) with **${s.faculty}** in **Room ${s.room}**`)
+        .join("\n");
+
+      return {
+        id: crypto.randomUUID(),
+        sender: "assistant",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        text: `### 🔬 Weekly Laboratory Schedule
+Here are all practical and studio lab sessions for **CSE-GEN Section F**:
+
+${list}`,
+        actionData: {
+          type: "sessions",
+          title: "Weekly Lab Schedule",
+          sessions: secFLabs.map((s) => ({
+            day: s.day,
+            period: `P${s.slot + 1}`,
+            periodNumber: s.slot + 1,
+            timeLabel: s.note || `Slot ${s.slot + 1}`,
+            subject: s.subject,
+            code: s.code,
+            room: s.room,
+            faculty: s.faculty,
+            type: "Lab",
+          })),
+        },
+      };
+    }
+
     const batch = collegeBatches[studentBatch.key];
     const labSessions: SessionItem[] = [];
 

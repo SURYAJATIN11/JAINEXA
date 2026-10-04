@@ -60,7 +60,7 @@ export default function CoverLoginPage() {
 
     setTimeout(() => {
       setIsLoading(false);
-      const res = loginStudent(studentPhone, studentUsn);
+      const res = loginStudent(studentUsn);
       if (res.success) {
         toast.success(`Welcome, ${res.user?.name || "Student"}!`, {
           description: `Logged in to B.Tech Timetable · USN: ${res.user?.username || studentUsn}`
@@ -68,7 +68,7 @@ export default function CoverLoginPage() {
         window.location.hash = "batch-timetable";
         setLocation("/timetable");
       } else {
-        setErrorMsg(res.error || "Authentication failed. Please verify your phone number and Name/USN.");
+        setErrorMsg(res.error || "Authentication failed. Please verify your University USN.");
       }
     }, 200);
   };
@@ -365,7 +365,7 @@ export default function CoverLoginPage() {
                         {activeRole === "admin" && "Admin Login"}
                       </h3>
                       <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                        {activeRole === "student" && "Enter phone and University USN"}
+                        {activeRole === "student" && "Enter your University USN"}
                         {activeRole === "faculty" && "Enter phone and faculty verification code"}
                         {activeRole === "admin" && "Enter administrator credentials"}
                       </p>
@@ -381,29 +381,12 @@ export default function CoverLoginPage() {
                   </div>
                 )}
 
-                {/* 1. Student Form */}
+                {/* 1. Student Form (Only USN required) */}
                 {activeRole === "student" && (
                   <form onSubmit={handleStudentSubmit} className="space-y-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Registered Mobile Number
-                      </label>
-                      <div className="relative">
-                        <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <Input
-                          type="text"
-                          value={studentPhone}
-                          onChange={(e) => setStudentPhone(e.target.value)}
-                          placeholder="Enter 10-digit mobile number"
-                          required
-                          className="pl-9 text-xs sm:text-sm h-10 rounded-xl bg-slate-50/70 border-slate-200 focus:bg-white focus:border-[#0a1e3a]"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        University USN / Registered Student Name
+                        University USN
                       </label>
                       <div className="relative">
                         <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -413,7 +396,7 @@ export default function CoverLoginPage() {
                           onChange={(e) => setStudentUsn(e.target.value.toUpperCase())}
                           placeholder="Enter University USN"
                           required
-                          className="pl-9 text-xs sm:text-sm h-10 rounded-xl bg-slate-50/70 border-slate-200 uppercase font-mono tracking-wider focus:bg-white focus:border-[#0a1e3a]"
+                          className="pl-9 text-xs sm:text-sm h-11 rounded-xl bg-slate-50/70 border-slate-200 uppercase font-mono tracking-wider focus:bg-white focus:border-[#0a1e3a]"
                         />
                       </div>
                     </div>
@@ -424,7 +407,7 @@ export default function CoverLoginPage() {
                       className="w-full h-11 text-sm font-bold bg-[#0a1e3a] hover:bg-[#12284c] text-white rounded-xl shadow-md mt-2 cursor-pointer flex items-center justify-center gap-2"
                     >
                       {isLoading ? (
-                        <span>Verifying Student Credentials...</span>
+                        <span>Verifying University USN...</span>
                       ) : (
                         <>
                           <span>Enter B.Tech Timetable</span>

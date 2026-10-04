@@ -210,7 +210,7 @@ const CREDENTIALS_MAP: Record<string, { pass: string; user: User }> = {
   student: { pass: "student123", user: DEMO_USERS[14] }
 };
 
-import { findStudentByCredentials } from "@/data/studentsData";
+import { findStudentByCredentials, findStudentByUsn } from "@/data/studentsData";
 import { findFacultyByCredentials, REGISTERED_FACULTY } from "@/data/facultyAuthData";
 
 interface AuthContextType {
@@ -222,7 +222,7 @@ interface AuthContextType {
   canAccessAttendance: boolean; // Accessible ONLY to admin and faculties
   canAccessAdminStudio: boolean; // Accessible ONLY to admin
   login: (identifier: string, passOrCode: string) => { success: boolean; error?: string };
-  loginStudent: (phone: string, nameOrUsn: string) => { success: boolean; error?: string; user?: User };
+  loginStudent: (usnOrPhone: string, maybeUsn?: string) => { success: boolean; error?: string; user?: User };
   loginFaculty: (phone: string, specialCode: string) => { success: boolean; error?: string; user?: User };
   loginAdmin: (identifier: string, pass: string) => { success: boolean; error?: string; user?: User };
   loginGuest: () => void;
@@ -246,20 +246,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   });
 
-  // Student Login: ONLY through Phone Number + Name or University USN
-  const loginStudent = (phone: string, nameOrUsn: string): { success: boolean; error?: string; user?: User } => {
-    const trimmedPhone = phone.trim();
-    const trimmedIdentifier = nameOrUsn.trim();
+  // Student Login: ONLY their USN is required!
+  const loginStudent = (usnOrPhone: string, maybeUsn?: string): { success: boolean; error?: string; user?: User } => {
+    const trimmedInput = (maybeUsn || usnOrPhone || "").trim();
 
-    if (!trimmedPhone || !trimmedIdentifier) {
-      return { success: false, error: "Please provide both your registered Phone Number and Name or USN." };
+    if (!trimmedInput) {
+      return { success: false, error: "Please enter your University USN." };
     }
 
-    const res = findStudentByCredentials(trimmedPhone, trimmedIdentifier);
+    const res = findStudentByUsn(trimmedInput);
     if (!res.success || !res.student) {
       return {
         success: false,
-        error: res.error || "Authentication failed. You can only log in with your own registered phone number."
+        error: res.error || "Authentication failed. No student record found for this USN."
       };
     }
 

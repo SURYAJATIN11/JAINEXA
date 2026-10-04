@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
-import { CAMPUS_FLOORS, BuildingRoom, RoomCategory, CATEGORY_CONFIG } from "@/data/floorPlanData";
+import { CAMPUS_FLOORS, BuildingRoom, RoomCategory, CATEGORY_CONFIG, findBuildingRoomByCodeOrName } from "@/data/floorPlanData";
 import { RoomDetailModal } from "@/components/RoomDetailModal";
 import {
   Building2,
@@ -98,18 +98,24 @@ export default function BuildingFloorPlanPanel({
       let matched: BuildingRoom | undefined;
       let matchedFloor = targetFloorNumber !== null && targetFloorNumber !== undefined ? targetFloorNumber : selectedFloorNum;
 
-      for (const floor of CAMPUS_FLOORS) {
-        const found = floor.rooms.find(
-          (r) =>
-            r.code.toUpperCase() === targetRoomCode.toUpperCase() ||
-            targetRoomCode.toUpperCase().includes(r.code.toUpperCase().replace(/[-\s]/g, "")) ||
-            r.code.toUpperCase().replace(/[-\s]/g, "") === targetRoomCode.toUpperCase().replace(/[-\s]/g, "") ||
-            r.name.toUpperCase().includes(targetRoomCode.toUpperCase())
-        );
-        if (found) {
-          matched = found;
-          matchedFloor = floor.floorNumber;
-          break;
+      const resolved = findBuildingRoomByCodeOrName(targetRoomCode);
+      if (resolved) {
+        matched = resolved.room;
+        matchedFloor = resolved.floorNumber;
+      } else {
+        for (const floor of CAMPUS_FLOORS) {
+          const found = floor.rooms.find(
+            (r) =>
+              r.code.toUpperCase() === targetRoomCode.toUpperCase() ||
+              targetRoomCode.toUpperCase().includes(r.code.toUpperCase().replace(/[-\s]/g, "")) ||
+              r.code.toUpperCase().replace(/[-\s]/g, "") === targetRoomCode.toUpperCase().replace(/[-\s]/g, "") ||
+              r.name.toUpperCase().includes(targetRoomCode.toUpperCase())
+          );
+          if (found) {
+            matched = found;
+            matchedFloor = floor.floorNumber;
+            break;
+          }
         }
       }
 
@@ -680,14 +686,17 @@ export default function BuildingFloorPlanPanel({
                 const isHovered = hoveredRoom?.id === room.id;
                 const isMatch = filteredRooms.some((r) => r.id === room.id);
                 const cfg = CATEGORY_CONFIG[room.category];
+                const targetDigits = targetRoomCode?.match(/\d{3}/)?.[0];
                 const isTarget = Boolean(
-                  targetRoomCode && (
+                  (selectedRoom && selectedRoom.id === room.id) ||
+                  (targetRoomCode && (
                     room.code.toUpperCase() === targetRoomCode.toUpperCase() ||
                     room.id.toUpperCase() === targetRoomCode.toUpperCase() ||
+                    (targetDigits && (room.code.includes(targetDigits) || room.id.includes(targetDigits))) ||
                     targetRoomCode.toUpperCase().includes(room.code.toUpperCase().replace(/[-\s]/g, "")) ||
                     room.code.toUpperCase().replace(/[-\s]/g, "") === targetRoomCode.toUpperCase().replace(/[-\s]/g, "") ||
                     room.name.toUpperCase().includes(targetRoomCode.toUpperCase())
-                  )
+                  ))
                 );
 
                 return (

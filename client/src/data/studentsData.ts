@@ -263,15 +263,62 @@ export interface StudentAuthResult {
   error?: string;
 }
 
+export function findStudentByUsn(usnOrName: string): StudentAuthResult {
+  const normInput = (usnOrName || "").trim().toUpperCase();
+  if (!normInput) {
+    return { success: false, error: "Please enter your University USN." };
+  }
+
+  const allStudents = loadAllStudents();
+
+  // Match: Check by exact USN
+  let match = allStudents.find((s) => s.usn.toUpperCase() === normInput);
+
+  // Match by contains / prefix USN
+  if (!match) {
+    match = allStudents.find((s) => s.usn.toUpperCase().includes(normInput) || normInput.includes(s.usn.toUpperCase()));
+  }
+
+  // Fallback match by Name
+  if (!match) {
+    match = allStudents.find((s) => s.name.toUpperCase() === normInput);
+  }
+
+  if (!match) {
+    match = allStudents.find((s) => {
+      const sName = s.name.toUpperCase();
+      if (sName.includes(normInput) || normInput.includes(sName)) return true;
+      const inputWords = normInput.split(/\s+/).filter(Boolean);
+      return inputWords.length >= 2 && inputWords.every((w) => sName.includes(w));
+    });
+  }
+
+  if (!match) {
+    return {
+      success: false,
+      error: `No registered student record found for USN "${usnOrName}". Please verify your University USN.`
+    };
+  }
+
+  const expectedPhone = (match.phone || getStudentRegisteredPhone(match.usn)).replace(/[^0-9]/g, "").slice(-10);
+
+  return {
+    success: true,
+    student: { ...match, phone: expectedPhone }
+  };
+}
+
 export function findStudentByCredentials(phone: string, nameOrUsn: string): StudentAuthResult {
   const normInput = (nameOrUsn || "").trim().toUpperCase();
   const normPhone = (phone || "").replace(/[^0-9]/g, "").slice(-10);
 
-  if (!normInput) {
-    return { success: false, error: "Please enter your registered student Name or USN." };
+  // If phone is not provided, authenticate via USN directly
+  if (!normPhone || normPhone.length === 0) {
+    return findStudentByUsn(nameOrUsn);
   }
-  if (!normPhone || normPhone.length < 10) {
-    return { success: false, error: "Please enter a valid 10-digit registered mobile number." };
+
+  if (!normInput) {
+    return { success: false, error: "Please enter your University USN." };
   }
 
   const allStudents = loadAllStudents();
@@ -300,7 +347,7 @@ export function findStudentByCredentials(phone: string, nameOrUsn: string): Stud
   if (!match) {
     return {
       success: false,
-      error: `No registered student record found for "${nameOrUsn}". Please verify your registered full name or USN.`
+      error: `No registered student record found for "${nameOrUsn}". Please verify your registered USN.`
     };
   }
 
@@ -310,7 +357,7 @@ export function findStudentByCredentials(phone: string, nameOrUsn: string): Stud
   if (normPhone !== expectedPhone) {
     return {
       success: false,
-      error: `Access Denied: The mobile number ending in ...${normPhone.slice(-4)} is NOT registered to ${match.name} (${match.usn}). You cannot log in with another phone number. Please use your registered phone number (ending in ...${expectedPhone.slice(-4)}).`
+      error: `Access Denied: The mobile number ending in ...${normPhone.slice(-4)} is NOT registered to ${match.name} (${match.usn}). Please use your registered phone number (ending in ...${expectedPhone.slice(-4)}).`
     };
   }
 

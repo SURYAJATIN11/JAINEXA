@@ -48,14 +48,14 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
   const handleStudentLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    const res = loginStudent(studentPhone, studentUsn);
+    const res = loginStudent(studentUsn);
     if (res.success) {
       toast.success("Student Authenticated", {
         description: `Welcome ${res.user?.name}! You are logged in as a student.`
       });
       onClose();
     } else {
-      setErrorMsg(res.error || "Authentication failed.");
+      setErrorMsg(res.error || "Authentication failed. Please check your USN.");
     }
   };
 
@@ -204,45 +204,28 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
             </div>
           )}
 
-          {/* TAB 1: STUDENT LOGIN (Phone Number + USN) */}
+          {/* TAB 1: STUDENT LOGIN (USN only) */}
           {activeTab === "student" && (
             <form onSubmit={handleStudentLogin} className="space-y-4">
               <div className="p-3 bg-[#fbf9f4] border border-[#e5e1d5] rounded-lg text-xs text-[#66636a] flex items-start gap-2">
                 <Info size={16} className="text-[#33409a] shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-[#252b67]">Strict Credential Security:</strong> Students log in using their <strong>registered Phone Number</strong> paired with their official <strong>Name or USN</strong>. Login with another student's phone number is strictly rejected.
+                  <strong className="text-[#252b67]">Student Access:</strong> Enter your official <strong>University USN</strong> (e.g. 25BTRGA001) to open your personalized academic timetable and live schedule.
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#77747b] mb-1">
-                  Registered Student Mobile Number
-                </label>
-                <div className="relative">
-                  <Phone size={15} className="absolute left-3 top-3 text-[#88848a]" />
-                  <Input
-                    type="tel"
-                    value={studentPhone}
-                    onChange={(e) => setStudentPhone(e.target.value)}
-                    placeholder="10-digit mobile number (e.g. 9845010001)"
-                    className="pl-9 text-xs bg-[#faf8f2] border-[#ded9cb]"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#77747b] mb-1">
-                  Registered Student Name or USN
+                  University USN
                 </label>
                 <div className="relative">
                   <GraduationCap size={15} className="absolute left-3 top-3 text-[#88848a]" />
                   <Input
                     type="text"
                     value={studentUsn}
-                    onChange={(e) => setStudentUsn(e.target.value)}
-                    placeholder="e.g. ABHIN ANTONY or 25BTRGA001"
-                    className="pl-9 text-xs font-semibold bg-[#faf8f2] border-[#ded9cb]"
+                    onChange={(e) => setStudentUsn(e.target.value.toUpperCase())}
+                    placeholder="Enter University USN (e.g. 25BTRGA001)"
+                    className="pl-9 text-xs font-semibold bg-[#faf8f2] border-[#ded9cb] uppercase font-mono tracking-wider"
                     required
                   />
                 </div>
