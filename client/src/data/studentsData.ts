@@ -187,6 +187,47 @@ export function addStudentRecord(newStudent: Student): { success: boolean; stude
   return { success: true, student: cleanStudent };
 }
 
+export function addMultipleStudents(studentsList: Student[]): {
+  success: boolean;
+  added: Student[];
+  existing: string[];
+  totalAdded: number;
+} {
+  const current = loadAllStudents();
+  const added: Student[] = [];
+  const existing: string[] = [];
+  const updated = [...current];
+
+  for (const s of studentsList) {
+    const normUSN = s.usn.toUpperCase().trim();
+    if (!normUSN) continue;
+    const exists = updated.find((item) => item.usn.toUpperCase().trim() === normUSN);
+    if (exists) {
+      existing.push(normUSN);
+    } else {
+      const cleanStudent: Student = {
+        ...s,
+        usn: normUSN,
+        sNo: updated.length + 1,
+        name: s.name.toUpperCase().trim()
+      };
+      updated.push(cleanStudent);
+      added.push(cleanStudent);
+    }
+  }
+
+  if (added.length > 0) {
+    saveAllStudents(updated);
+  }
+
+  return {
+    success: added.length > 0,
+    added,
+    existing,
+    totalAdded: added.length
+  };
+}
+
 export function removeStudentRecord(usnOrName: string): { success: boolean; removedStudent?: Student; error?: string } {
   const current = loadAllStudents();
   const norm = usnOrName.toUpperCase().trim();

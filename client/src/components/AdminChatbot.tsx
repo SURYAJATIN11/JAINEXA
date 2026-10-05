@@ -80,7 +80,9 @@ import {
 import {
   loadAllStudents,
   addStudentRecord,
+  addMultipleStudents,
   removeStudentRecord,
+  getStudentRegisteredPhone,
   type Student
 } from "@/data/studentsData";
 
@@ -121,13 +123,15 @@ export type WizardMode =
   | "schedule_subject"
   | "schedule_teacher"
   | "schedule_room_type"
-  | "faculty_add_name"
   | "faculty_add_dept"
+  | "faculty_add_name"
   | "faculty_add_phone"
   | "faculty_add_code"
   | "faculty_remove_select"
   | "faculty_assign_code_select"
   | "faculty_assign_code_input"
+  | "student_add_target"
+  | "student_add_input"
   | "student_add_name"
   | "student_add_usn"
   | "student_add_class"
@@ -156,6 +160,7 @@ export interface FacultyWizardDraft {
 }
 
 export interface StudentWizardDraft {
+  academicYear?: string;
   name?: string;
   usn?: string;
   program?: string;
@@ -211,7 +216,7 @@ function parseSlot(text: string): number | null {
 function parseClass(text: string): { program?: string; semester?: string; section?: string } {
   const result: { program?: string; semester?: string; section?: string } = {};
 
-  const programMatch = text.match(/\b(CSE-GEN|CSE-DS|CSE-AIML|AIML|DS|AIDE|CSE|MCA|MBA|SE|AI-DevOPS)\b/i);
+  const programMatch = text.match(/\b(CSE-GEN|CSE-DS|CSE-AIML|AIML|DS|AIDE|CSE|MCA|MBA|SE|AI-DevOPS|ECE|MECH|CIVIL)\b/i);
   if (programMatch) result.program = programMatch[1].toUpperCase();
 
   const semMatch = text.match(/(?:sem(?:ester)?\s*(\d)|(\d)(?:st|nd|rd|th)\s*sem)/i);
@@ -221,6 +226,133 @@ function parseClass(text: string): { program?: string; semester?: string; sectio
   if (secMatch) result.section = (secMatch[1] || secMatch[2]).toUpperCase();
 
   return result;
+}
+
+function parseAcademicYearAndClass(
+  text: string,
+  defaultProgram: string,
+  defaultSemester: string,
+  defaultSection: string
+): {
+  academicYear: string;
+  program: string;
+  semester: string;
+  section: string;
+} {
+  const upper = text.toUpperCase();
+  let prog = defaultProgram;
+  let sem = defaultSemester;
+  let sec = defaultSection;
+
+  // Program / Branch matching
+  const progMatch = upper.match(/\b(CSE-GEN|CSE-DS|CSE-AIML|AIDE|AIML|CSE|DS|ECE|MECH|CIVIL|MCA|MBA|SE)\b/i);
+  if (progMatch) {
+    prog = progMatch[1].toUpperCase();
+    if (prog === "CSE") prog = "CSE-GEN";
+  }
+
+  // Academic Year / Semester matching
+  if (/\b(1ST\s*YEAR|FIRST\s*YEAR|FRESHMEN|FRESHMAN|NEW\s*ACADEMIC\s*YEAR|AY\s*2026|AY\s*2027|2026-27|2027-28)\b/i.test(upper)) {
+    sem = "1";
+  } else if (/\b(2ND\s*YEAR|SECOND\s*YEAR|SOPHOMORE)\b/i.test(upper)) {
+    sem = "3";
+  } else if (/\b(3RD\s*YEAR|THIRD\s*YEAR|JUNIOR)\b/i.test(upper)) {
+    sem = "5";
+  } else if (/\b(4TH\s*YEAR|FOURTH\s*YEAR|SENIOR)\b/i.test(upper)) {
+    sem = "7";
+  }
+
+  const semMatch = upper.match(/(?:SEM(?:ESTER)?\s*([1-8])|([1-8])(?:ST|ND|RD|TH)\s*SEM|\bS([1-8])\b)/i);
+  if (semMatch) {
+    sem = semMatch[1] || semMatch[2] || semMatch[3];
+  } else {
+    const directMatch = upper.match(/\b(?:CSE-GEN|CSE-DS|AIDE|ECE|MECH|CIVIL)\s+([1-8])\b/i);
+    if (directMatch) sem = directMatch[1];
+  }
+
+  // Section matching
+  const secMatch = upper.match(/(?:SEC(?:TION)?\s*([A-H])|\b([A-H])\s*SECTION|\bS[1-8]\s*([A-H])\b)/i);
+  if (secMatch) {
+    sec = (secMatch[1] || secMatch[2] || secMatch[3]).toUpperCase();
+  } else {
+    const spaceSec = upper.match(/\b[1-8]\s+([A-H])\b/);
+    if (spaceSec) {
+      sec = spaceSec[1];
+    } else {
+      const joined = upper.match(/\b[1-8]([A-H])\b/);
+      if (joined) sec = joined[1];
+    }
+  }
+
+  const academicYear = getAcademicYearFromSemester(sem);
+  return { academicYear, program: prog, semester: sem, section: sec };
+}
+
+function parseStudentEntries(
+  input: string,
+  targetProgram: string,
+  targetSemester: string,
+  targetSection: string
+): Student[] {
+  let rawItems = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (rawItems.length === 1 && rawItems[0].includes(",")) {
+    rawItems = rawItems[0].split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
+  const allExisting = loadAllStudents();
+  const existingUSNSet = new Set(allExisting.map((s) => s.usn.toUpperCase().trim()));
+
+  const progCode = (targetProgram || "CSE").replace(/[^A-Z]/gi, "").slice(0, 4).toUpperCase();
+  const yrPrefix = parseInt(targetSemester, 10) <= 2 ? "26BT" : "25BT";
+
+  const students: Student[] = [];
+  let autoSeq = 1;
+
+  for (const item of rawItems) {
+    const usnMatch = item.match(/\b([0-9]{2}[A-Z0-9]{5,10})\b/i);
+    let usn = "";
+    let name = "";
+
+    if (usnMatch) {
+      usn = usnMatch[1].toUpperCase();
+      name = item.replace(usnMatch[0], "").replace(/[-–—:,]/g, " ").trim();
+    } else {
+      name = item.replace(/^[0-9]+[.)]\s*/, "").trim();
+    }
+
+    if (!name && usn) {
+      name = `STUDENT ${usn}`;
+    }
+
+    name = name.replace(/\s+/g, " ").trim();
+    if (!name) continue;
+
+    if (!usn) {
+      while (autoSeq <= 999) {
+        const candidate = `${yrPrefix}${progCode}${String(autoSeq).padStart(3, "0")}`;
+        if (!existingUSNSet.has(candidate) && !students.some((s) => s.usn === candidate)) {
+          usn = candidate;
+          break;
+        }
+        autoSeq++;
+      }
+      if (!usn) {
+        usn = `${yrPrefix}${progCode}${Date.now().toString().slice(-4)}`;
+      }
+    }
+
+    students.push({
+      sNo: allExisting.length + students.length + 1,
+      usn: usn.toUpperCase(),
+      name: name.toUpperCase(),
+      program: targetProgram,
+      semester: targetSemester,
+      section: targetSection,
+      phone: getStudentRegisteredPhone(usn)
+    });
+  }
+
+  return students;
 }
 
 /* ─────────────── COMPONENT ─────────────── */
@@ -500,74 +632,66 @@ export function AdminChatbot({
 
   /* ─────────────── 2. FACULTY MANAGEMENT FLOW ─────────────── */
 
-  const startAddFacultyFlow = useCallback(() => {
+  const startAddFacultyFlow = useCallback((presetDept?: string) => {
+    if (presetDept) {
+      setFacultyDraft({ department: presetDept });
+      setMode("faculty_add_name");
+      addMsg({
+        text: `👨‍🏫 **Register New Faculty — Step 2/3: Faculty Name**\n\nBranch / Department: **${presetDept}**\nWhat is the full name of the professor / faculty member?\nExample: \`Dr. Ramesh Kumar\` or \`Prof. Anita Sharma\``,
+        status: "info",
+        actions: [{ label: "❌ Cancel", variant: "danger", fn: cancelFlow }]
+      });
+      return;
+    }
+
     setFacultyDraft({});
-    setMode("faculty_add_name");
-
-    addMsg({
-      text: `👨‍🏫 **Register New Faculty — Step 1/4: Faculty Name**\n\nWhat is the full name of the new faculty member?\nExample: \`Dr. Ramesh Kumar\` or \`Prof. Anita Sharma\``,
-      status: "info",
-      actions: [{ label: "❌ Cancel", variant: "danger", fn: cancelFlow }]
-    });
-  }, [addMsg, cancelFlow]);
-
-  const handleFacultyAddName = (text: string) => {
-    addMsg({ role: "user", text });
-    const name = text.trim();
-    setFacultyDraft((prev) => ({ ...prev, name }));
     setMode("faculty_add_dept");
 
     addMsg({
-      text: `🏛️ **Register New Faculty — Step 2/4: Department**\n\nFaculty: **${name}**\nWhich department do they belong to? Pick a suggestion or type custom department:`,
+      text: `👨‍🏫 **Register New Faculty — Step 1/3: Branch / Department**\n\nWhich academic branch or department does this faculty member belong to?\n*(Pick a department or type any branch name)*:`,
       status: "info",
       actions: [
-        { label: "Computer Science & Engineering", fn: () => handleFacultyAddDept("Computer Science & Engineering") },
-        { label: "Information Science & Engineering", fn: () => handleFacultyAddDept("Information Science & Engineering") },
+        { label: "Computer Science & Engineering (CSE)", variant: "primary", fn: () => handleFacultyAddDept("Computer Science & Engineering") },
+        { label: "Data Science & AI (CSE-DS / AIDE)", fn: () => handleFacultyAddDept("Data Science & Artificial Intelligence") },
+        { label: "Electronics & Communication (ECE)", fn: () => handleFacultyAddDept("Electronics & Communication Engineering") },
         { label: "Department of Mathematics", fn: () => handleFacultyAddDept("Department of Mathematics") },
-        { label: "Department of Chemistry & Basic Sciences", fn: () => handleFacultyAddDept("Department of Chemistry & Basic Sciences") },
-        { label: "Humanities & Social Sciences", fn: () => handleFacultyAddDept("Humanities & Social Sciences") },
+        { label: "Mechanical / Civil Engineering", fn: () => handleFacultyAddDept("Mechanical & Civil Engineering") },
+        { label: "Basic Sciences & Humanities", fn: () => handleFacultyAddDept("Basic Sciences & Humanities") },
         { label: "❌ Cancel", variant: "danger", fn: cancelFlow }
       ]
     });
-  };
+  }, [addMsg, cancelFlow]);
 
   const handleFacultyAddDept = (text: string) => {
     addMsg({ role: "user", text });
     const department = text.trim();
     setFacultyDraft((prev) => ({ ...prev, department }));
-    setMode("faculty_add_phone");
+    setMode("faculty_add_name");
 
     addMsg({
-      text: `📱 **Register New Faculty — Step 3/4: Mobile Number**\n\nDepartment: **${department}**\nWhat is their registered 10-digit mobile number for portal authentication?\nExample: \`9845019001\``,
+      text: `👨‍🏫 **Register New Faculty — Step 2/3: Faculty Full Name**\n\nBranch / Department: **${department}**\nWhat is the full name of the professor / faculty member?\nExample: \`Dr. Ramesh Kumar\` or \`Prof. Anita Sharma\``,
       status: "info",
-      actions: [
-        { label: "Auto: 9845019001", fn: () => handleFacultyAddPhone("9845019001") },
-        { label: "Auto: 9845019002", fn: () => handleFacultyAddPhone("9845019002") },
-        { label: "❌ Cancel", variant: "danger", fn: cancelFlow }
-      ]
+      actions: [{ label: "❌ Cancel", variant: "danger", fn: cancelFlow }]
     });
   };
 
-  const handleFacultyAddPhone = (text: string) => {
+  const handleFacultyAddName = (text: string) => {
     addMsg({ role: "user", text });
-    const phone = text.replace(/[^0-9]/g, "").slice(-10);
-    if (phone.length < 10) {
-      addMsg({ text: "⚠️ Please enter a valid 10-digit mobile number.", status: "warning" });
-      return;
-    }
-    setFacultyDraft((prev) => ({ ...prev, phone }));
+    const name = text.trim();
+    setFacultyDraft((prev) => ({ ...prev, name }));
     setMode("faculty_add_code");
 
-    const defaultCode = `JGI-FAC-${phone.slice(-4)}`;
+    const dept = facultyDraft.department || "Computer Science & Engineering";
+    const randomCode = `JGI-FAC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const randomPhone = `98450${Math.floor(10000 + Math.random() * 90000)}`;
 
     addMsg({
-      text: `🔑 **Register New Faculty — Step 4/4: Faculty Passcode & Role**\n\nMobile: **${phone}**\nWhat faculty verification code and designation should be assigned?\n(Pick a passcode or type your own code):`,
+      text: `🔑 **Register New Faculty — Step 3/3: Mobile & Passcode**\n\n• 👨‍🏫 **Faculty:** **${name}**\n• 🏛️ **Branch / Dept:** ${dept}\n\nEnter their 10-digit mobile number and/or assign their Special Passcode:\n*(Pick an auto-assigned credential below or type phone & passcode in chat)*:`,
       status: "info",
       actions: [
-        { label: `Auto Code: ${defaultCode}`, variant: "primary", fn: () => finalizeAddFaculty(`${defaultCode} Assistant Professor`) },
-        { label: "JGI-FAC-2026 (Assistant Professor)", fn: () => finalizeAddFaculty("JGI-FAC-2026 Assistant Professor") },
-        { label: "JGI-FAC-3001 (Associate Professor)", fn: () => finalizeAddFaculty("JGI-FAC-3001 Associate Professor") },
-        { label: "JGI-FAC-5001 (Professor)", fn: () => finalizeAddFaculty("JGI-FAC-5001 Professor") },
+        { label: `Auto: ${randomCode} (Assistant Professor)`, variant: "primary", fn: () => finalizeAddFaculty(`${randomPhone} ${randomCode} Assistant Professor`) },
+        { label: `Auto: ${randomCode} (Associate Professor)`, fn: () => finalizeAddFaculty(`${randomPhone} ${randomCode} Associate Professor`) },
+        { label: `Auto: ${randomCode} (Professor / HoD)`, fn: () => finalizeAddFaculty(`${randomPhone} ${randomCode} Professor & HoD`) },
         { label: "❌ Cancel", variant: "danger", fn: cancelFlow }
       ]
     });
@@ -575,13 +699,23 @@ export function AdminChatbot({
 
   const finalizeAddFaculty = (text: string) => {
     addMsg({ role: "user", text });
-    const codeMatch = text.match(/\b([A-Za-z0-9_-]+)\b/);
-    const code = codeMatch ? codeMatch[1].toUpperCase() : `JGI-FAC-${facultyDraft.phone?.slice(-4) || "2026"}`;
-    const designation = text.includes("Professor") ? text.replace(code, "").trim() || "Assistant Professor" : "Assistant Professor";
-
     const name = facultyDraft.name || "New Faculty";
-    const phone = facultyDraft.phone || "9845019001";
     const department = facultyDraft.department || "Computer Science & Engineering";
+
+    // Extract phone if present
+    const phoneMatch = text.match(/\b([6-9]\d{9})\b/);
+    const phone = phoneMatch ? phoneMatch[1] : facultyDraft.phone || `98450${Math.floor(10000 + Math.random() * 90000)}`;
+
+    // Extract special code
+    const codeMatch = text.match(/\b(JGI-FAC-[A-Z0-9]+|FAC-[A-Z0-9]+|[A-Z]{3,}-[0-9]{3,})\b/i);
+    const code = codeMatch ? codeMatch[1].toUpperCase() : `JGI-FAC-${phone.slice(-4)}`;
+
+    // Extract designation
+    let designation = "Assistant Professor";
+    if (text.toLowerCase().includes("associate professor")) designation = "Associate Professor";
+    else if (text.toLowerCase().includes("professor & hod") || text.toLowerCase().includes("hod")) designation = "Professor & Head of Department";
+    else if (text.toLowerCase().includes("professor")) designation = "Professor";
+    else if (text.toLowerCase().includes("lecturer")) designation = "Senior Lecturer";
 
     const newFaculty: FacultyAuthRecord = {
       id: `fac_${Date.now()}_${uid()}`,
@@ -605,13 +739,15 @@ export function AdminChatbot({
     toast.success(`Faculty ${name} registered successfully!`);
     setMode("idle");
     setFacultyDraft({});
+    onDataChange?.();
 
     addMsg({
-      text: `🎉 **Faculty Member Successfully Registered!**\n\n• 👨‍🏫 **Name:** **${name}**\n• 🏛️ **Department:** ${department}\n• 📱 **Registered Phone:** \`${phone}\`\n• 🔑 **Faculty Passcode:** \`${code}\`\n• 🎖️ **Designation:** ${designation}\n\n✅ **Instant Live Access:** This faculty member can now log in immediately on the homepage using their Phone (\`${phone}\`) and Code (\`${code}\`), and will appear in timetable scheduling!`,
+      text: `🎉 **Faculty Member Successfully Registered!**\n\n• 👨‍🏫 **Name:** **${name}**\n• 🏛️ **Branch / Department:** ${department}\n• 📱 **Registered Phone:** \`${phone}\`\n• 🔑 **Faculty Passcode:** \`${code}\`\n• 🎖️ **Designation:** ${designation}\n\n✅ **Instant Live Access:** This faculty member can now log in immediately on the homepage using their Phone (\`${phone}\`) and Code (\`${code}\`), and is now available for timetable scheduling across the university!`,
       status: "ok",
       actions: [
-        { label: "👨‍🏫 Add Another Faculty", variant: "primary", fn: () => startAddFacultyFlow() },
-        { label: "📋 List All Faculty", fn: () => handleGeneralCommand("list all faculty") }
+        { label: "👨‍🏫 Add Another Faculty", variant: "primary", fn: () => startAddFacultyFlow(department) },
+        { label: "📋 List All Faculty", fn: () => handleGeneralCommand("list all faculty") },
+        { label: `⚡ Schedule Class for ${name}`, fn: () => startScheduleFlow({ faculty: name }) }
       ]
     });
   };
@@ -768,113 +904,154 @@ export function AdminChatbot({
 
   /* ─────────────── 3. STUDENT MANAGEMENT FLOW ─────────────── */
 
-  const startAddStudentFlow = useCallback(() => {
-    setStudentDraft({});
-    setMode("student_add_name");
+  const startAddStudentFlow = useCallback((preset?: { program?: string; semester?: string; section?: string; academicYear?: string }) => {
+    const p = preset?.program || program;
+    const s = preset?.semester || semester;
+    const sec = preset?.section || section;
+    const yr = preset?.academicYear || getAcademicYearFromSemester(s);
+
+    setStudentDraft({ program: p, semester: s, section: sec, academicYear: yr });
+    setMode("student_add_target");
 
     addMsg({
-      text: `🎓 **Register New Student — Step 1/4: Student Full Name**\n\nWhat is the student's registered full name?\nExample: \`ARJUN PATEL\` or \`PRIYA KRISHNA\``,
-      status: "info",
-      actions: [{ label: "❌ Cancel", variant: "danger", fn: cancelFlow }]
-    });
-  }, [addMsg, cancelFlow]);
-
-  const handleStudentAddName = (text: string) => {
-    addMsg({ role: "user", text });
-    const name = text.trim().toUpperCase();
-    setStudentDraft((prev) => ({ ...prev, name }));
-    setMode("student_add_usn");
-
-    addMsg({
-      text: `🆔 **Register New Student — Step 2/4: University USN**\n\nStudent: **${name}**\nWhat is their University Seat Number (USN)?\nExample: \`25BTRGA075\` or \`25BTDS050\``,
+      text: `🎓 **Register Student(s) — Step 1/2: Academic Year, Branch & Class**\n\nSelect the target Academic Year, Branch, and Section for student enrollment:\n• Active Class: **${p} · ${yr} · Sem ${s} · Sec ${sec}**\n\n*(Choose a preset below or type custom, e.g. "1st Year Freshmen CSE-GEN Sem 1 Sec A" or "New Academic Year 2026-27 CSE-DS 1 A")*:`,
       status: "info",
       actions: [
-        { label: "Auto: 25BTRGA075", fn: () => handleStudentAddUSN("25BTRGA075") },
-        { label: "Auto: 25BTRGA080", fn: () => handleStudentAddUSN("25BTRGA080") },
-        { label: "❌ Cancel", variant: "danger", fn: cancelFlow }
+        {
+          label: `📌 Active: ${p} S${s} ${sec}`,
+          variant: "primary",
+          fn: () => handleStudentAddTarget(`${p} ${s} ${sec}`)
+        },
+        {
+          label: `✨ New AY (1st Year Freshmen · CSE-GEN S1 Sec A)`,
+          fn: () => handleStudentAddTarget("1st Year CSE-GEN 1 A")
+        },
+        {
+          label: `✨ New AY (1st Year Freshmen · CSE-DS S1 Sec A)`,
+          fn: () => handleStudentAddTarget("1st Year CSE-DS 1 A")
+        },
+        {
+          label: `✨ Same AY (2nd Year · CSE-GEN S3 Sec F)`,
+          fn: () => handleStudentAddTarget("2nd Year CSE-GEN 3 F")
+        },
+        {
+          label: `✨ Same AY (2nd Year · CSE-DS S3 Sec A)`,
+          fn: () => handleStudentAddTarget("2nd Year CSE-DS 3 A")
+        },
+        {
+          label: `✨ 3rd Year · CSE-GEN S5 Sec A`,
+          fn: () => handleStudentAddTarget("3rd Year CSE-GEN 5 A")
+        },
+        {
+          label: `✨ 4th Year · CSE-GEN S7 Sec A`,
+          fn: () => handleStudentAddTarget("4th Year CSE-GEN 7 A")
+        },
+        {
+          label: "❌ Cancel",
+          variant: "danger",
+          fn: cancelFlow
+        }
+      ]
+    });
+  }, [program, semester, section, addMsg, cancelFlow]);
+
+  const handleStudentAddTarget = (text: string) => {
+    addMsg({ role: "user", text });
+    const parsed = parseAcademicYearAndClass(text, studentDraft.program || program, studentDraft.semester || semester, studentDraft.section || section);
+
+    setStudentDraft((prev) => ({
+      ...prev,
+      academicYear: parsed.academicYear,
+      program: parsed.program,
+      semester: parsed.semester,
+      section: parsed.section
+    }));
+    setMode("student_add_input");
+
+    const yrPrefix = parseInt(parsed.semester, 10) <= 2 ? "26BT" : "25BT";
+    const progCode = parsed.program.replace(/[^A-Z]/gi, "").slice(0, 4);
+
+    const sampleBatch = `${yrPrefix}${progCode}001 ARJUN SHARMA\n${yrPrefix}${progCode}002 PRIYA PATEL\n${yrPrefix}${progCode}003 RAHUL VERMA`;
+    const sampleSingle = `${yrPrefix}${progCode}099 NEW STUDENT`;
+
+    addMsg({
+      text: `📋 **Register Student(s) — Step 2/2: Student Name(s) or Full List**\n\n🎯 **Target:** **${parsed.academicYear} · ${parsed.program} · Semester ${parsed.semester} · Section ${parsed.section}**\n\nEnter a **single student** OR paste a **batch list** of students!\n\n**Accepted Formats:**\n• \`USN Full Name\` (one student per line, e.g. \`${yrPrefix}${progCode}001 ARJUN SHARMA\`)\n• Just student names (one per line or comma-separated) — USNs will be auto-generated sequentially!\n\n*(Type or paste in the chat, or click a quick sample below)*:`,
+      status: "info",
+      actions: [
+        {
+          label: `⚡ Auto Batch (3 Sample Students)`,
+          variant: "primary",
+          fn: () => handleStudentAddInput(sampleBatch)
+        },
+        {
+          label: `⚡ Add Single: ${sampleSingle}`,
+          fn: () => handleStudentAddInput(sampleSingle)
+        },
+        {
+          label: "❌ Cancel",
+          variant: "danger",
+          fn: cancelFlow
+        }
       ]
     });
   };
 
-  const handleStudentAddUSN = (text: string) => {
+  const handleStudentAddInput = (text: string) => {
     addMsg({ role: "user", text });
-    const usn = text.trim().toUpperCase();
-    setStudentDraft((prev) => ({ ...prev, usn }));
-    setMode("student_add_class");
+    const targetProgram = studentDraft.program || program;
+    const targetSemester = studentDraft.semester || semester;
+    const targetSection = studentDraft.section || section;
+    const academicYear = studentDraft.academicYear || getAcademicYearFromSemester(targetSemester);
 
-    addMsg({
-      text: `🏫 **Register New Student — Step 3/4: Class & Section**\n\nUSN: **${usn}**\nWhich branch, semester, and section should they be enrolled in?`,
-      status: "info",
-      actions: [
-        { label: `✅ Current: ${program} S${semester} Sec ${section}`, variant: "primary", fn: () => handleStudentAddClass(`${program} ${semester} ${section}`) },
-        { label: "CSE-GEN · Sem 3 · Sec F", fn: () => handleStudentAddClass("CSE-GEN 3 F") },
-        { label: "CSE-DS · Sem 3 · Sec A", fn: () => handleStudentAddClass("CSE-DS 3 A") },
-        { label: "AIDE · Sem 1 · Sec A", fn: () => handleStudentAddClass("AIDE 1 A") },
-        { label: "❌ Cancel", variant: "danger", fn: cancelFlow }
-      ]
-    });
-  };
+    const parsedList = parseStudentEntries(text, targetProgram, targetSemester, targetSection);
 
-  const handleStudentAddClass = (text: string) => {
-    addMsg({ role: "user", text });
-    const parsed = parseClass(text);
-    const p = parsed.program || program;
-    const s = parsed.semester || semester;
-    const sec = parsed.section || section;
-
-    setStudentDraft((prev) => ({ ...prev, program: p, semester: s, section: sec }));
-    setMode("student_add_phone");
-
-    const defaultPhone = `9845010${studentDraft.usn?.slice(-3) || "075"}`;
-
-    addMsg({
-      text: `📱 **Register New Student — Step 4/4: Registered Mobile Number**\n\nEnrolling in: **${p} Sem ${s} Sec ${sec}**\nWhat 10-digit mobile number will the student use for verification?\n*(Required for exact two-factor authentication)*:`,
-      status: "info",
-      actions: [
-        { label: `Auto: ${defaultPhone}`, variant: "primary", fn: () => finalizeAddStudent(defaultPhone) },
-        { label: "Use 9845010001 (Krushna Demo Phone)", fn: () => finalizeAddStudent("9845010001") },
-        { label: "❌ Cancel", variant: "danger", fn: cancelFlow }
-      ]
-    });
-  };
-
-  const finalizeAddStudent = (text: string) => {
-    addMsg({ role: "user", text });
-    const phone = text.replace(/[^0-9]/g, "").slice(-10);
-
-    const name = studentDraft.name || "NEW STUDENT";
-    const usn = studentDraft.usn || "25BTRGA075";
-    const p = studentDraft.program || program;
-    const s = studentDraft.semester || semester;
-    const sec = studentDraft.section || section;
-
-    const newStudent: Student = {
-      sNo: 99,
-      usn,
-      name,
-      program: p,
-      semester: s,
-      section: sec,
-      phone
-    };
-
-    const res = addStudentRecord(newStudent);
-    if (!res.success) {
-      addMsg({ text: `❌ ${res.error || "Failed to add student."}`, status: "error" });
-      setMode("idle");
+    if (parsedList.length === 0) {
+      addMsg({
+        text: `⚠️ No valid student entries found in input. Please enter student names or USNs (e.g. \`26BTRGA001 ARJUN SHARMA\` or \`Arjun Sharma, Priya Patel\`):`,
+        status: "warning"
+      });
       return;
     }
 
-    toast.success(`Student ${name} (${usn}) registered successfully!`);
+    const res = addMultipleStudents(parsedList);
+
     setMode("idle");
     setStudentDraft({});
 
+    if (res.totalAdded === 0 && res.existing.length > 0) {
+      addMsg({
+        text: `⚠️ All provided USNs are already registered in the system:\n${res.existing.map((u) => `• \`${u}\``).join("\n")}`,
+        status: "warning"
+      });
+      return;
+    }
+
+    toast.success(`Successfully enrolled ${res.totalAdded} student(s)!`);
+
+    const previewList = res.added.slice(0, 8).map((s) => `• \`${s.usn}\`: **${s.name}**`).join("\n");
+    const moreCount = res.totalAdded > 8 ? `\n*...and ${res.totalAdded - 8} more students*` : "";
+    const existingNote = res.existing.length > 0 ? `\n\n*(Note: ${res.existing.length} existing USN(s) were skipped)*` : "";
+
     addMsg({
-      text: `🎉 **Student Successfully Enrolled!**\n\n• 🎓 **Name:** **${name}**\n• 🆔 **USN:** \`${usn}\`\n• 🏫 **Batch:** **${p} · Semester ${s} · Section ${sec}**\n• 📱 **Registered Phone:** \`${phone}\`\n\n✅ **Instant Live Access:** This student is now enrolled in the official class roster, will appear in attendance marking, and can log in on the homepage using their Phone (\`${phone}\`) and USN (\`${usn}\`)!`,
+      text: `🎉 **Successfully Enrolled ${res.totalAdded} Student(s)!**\n\n• 🎓 **Academic Year:** ${academicYear}\n• 🏫 **Branch & Class:** **${targetProgram} · Semester ${targetSemester} · Section ${targetSection}**\n• 👥 **Enrolled Students:**\n${previewList}${moreCount}${existingNote}\n\n✅ **Instant Student Login:**\nOnly the student's **USN** is required for login. These students can log in immediately on the student portal using their assigned USN!`,
       status: "ok",
       actions: [
-        { label: "🎓 Add Another Student", variant: "primary", fn: () => startAddStudentFlow() },
-        { label: "📋 View Enrolled Students", fn: () => handleGeneralCommand("list students") }
+        {
+          label: "🎓 Add More Students",
+          variant: "primary",
+          fn: () => startAddStudentFlow({ program: targetProgram, semester: targetSemester, section: targetSection, academicYear })
+        },
+        {
+          label: `📋 View Roster (${targetProgram} S${targetSemester} ${targetSection})`,
+          fn: () => handleGeneralCommand(`list students in ${targetProgram} ${targetSemester} ${targetSection}`)
+        },
+        {
+          label: `🔄 Switch Studio View to ${targetProgram} S${targetSemester} ${targetSection}`,
+          fn: () => {
+            onClassSwitch?.(targetProgram, targetSemester, targetSection);
+            toast.success(`Switched studio view to ${targetProgram} S${targetSemester} Sec ${targetSection}`);
+          }
+        }
       ]
     });
   };
@@ -919,60 +1096,112 @@ export function AdminChatbot({
   const handleGeneralCommand = useCallback((rawText: string) => {
     const t = rawText.toLowerCase().trim();
 
-    // Global cancel / abort
-    if (/\b(cancel|stop|exit|abort|nevermind)\b/i.test(t) && mode !== "idle") {
-      cancelFlow();
-      return;
+    // Check if user is issuing a top-level command or intent
+    const isCancel = /\b(cancel|stop|exit|abort|nevermind)\b/i.test(t);
+    const isAddStudentCmd = /\b(add|new|register|enroll|create|bulk|batch|import)\s*(students?|roster|student\s*list)\b/i.test(t) || /^(add\s*students?|new\s*students?|enroll\s*students?|student\s*list|students\s*list)$/i.test(t);
+    const isListStudentCmd = /\b(list|show|display|view)\s*(students?|roster)\b/i.test(t);
+    const isRemoveStudentCmd = /\b(remove|delete|drop)\s*(students?)\b/i.test(t);
+    const isAddFacultyCmd = /\b(add|new|register|create)\s*(faculty|teacher|professor)\b/i.test(t) || /^(add\s*faculty|new\s*faculty|add\s*teacher|new\s*teacher)$/i.test(t);
+    const isRemoveFacultyCmd = /\b(remove|delete|drop)\s*(faculty|teacher|professor)\b/i.test(t);
+    const isListFacultyCmd = /\b(list|show|display|view)\s*(faculty|teachers|professors)\b/i.test(t);
+    const isAssignCodeCmd = /\b(feature\s*5|assign\s*(special\s*)?code|teacher\s*code|faculty\s*code|set\s*(special\s*)?code|change\s*(special\s*)?code|update\s*(special\s*)?code)\b/i.test(t) || (t.includes("code") && (t.includes("teacher") || t.includes("faculty") || t.includes("assign")));
+    const isScheduleCmd = /\b(schedule\s*(class|session|period|slot|timetable|lecture|lab)?|create\s*(timetable|schedule|session)|add\s*(session|slot|period|lecture|lab))\b/i.test(t) || /^(schedule|schedule\s*class)$/i.test(t);
+    const isManageUsersCmd = /\b(manage\s*(users?|faculty|students?)|user\s*management)\b/i.test(t);
+    const isHelpCmd = /\b(help|commands?|usage|what can you)\b/i.test(t);
+
+    const isTopLevelIntent = isCancel || isAddStudentCmd || isListStudentCmd || isRemoveStudentCmd || isAddFacultyCmd || isRemoveFacultyCmd || isListFacultyCmd || isAssignCodeCmd || isScheduleCmd || isManageUsersCmd || isHelpCmd;
+
+    // Critical Bug Fix: If a top-level command is detected while inside a wizard, abort wizard immediately!
+    if (isTopLevelIntent && mode !== "idle") {
+      if (isCancel) {
+        cancelFlow();
+        return;
+      }
+      setMode("idle");
+      setScheduleDraft({ program, semester, section });
+      setFacultyDraft({});
+      setStudentDraft({});
+      setAssignCodeDraft({});
     }
 
-    // Active wizard step router
+    // Active wizard step router (only runs when mode is active and not intercepted by top-level command)
     if (mode === "schedule_year_sem") { handleScheduleYearSem(rawText); return; }
     if (mode === "schedule_day_slot") { handleScheduleDaySlot(rawText); return; }
     if (mode === "schedule_subject") { handleScheduleSubject(rawText); return; }
     if (mode === "schedule_teacher") { handleScheduleTeacher(rawText); return; }
     if (mode === "schedule_room_type") { finalizeSchedule(rawText); return; }
 
-    if (mode === "faculty_add_name") { handleFacultyAddName(rawText); return; }
     if (mode === "faculty_add_dept") { handleFacultyAddDept(rawText); return; }
-    if (mode === "faculty_add_phone") { handleFacultyAddPhone(rawText); return; }
+    if (mode === "faculty_add_name") { handleFacultyAddName(rawText); return; }
     if (mode === "faculty_add_code") { finalizeAddFaculty(rawText); return; }
     if (mode === "faculty_remove_select") { handleRemoveFaculty(rawText); return; }
 
     if (mode === "faculty_assign_code_select") { handleAssignCodeSelect(rawText); return; }
     if (mode === "faculty_assign_code_input") { finalizeAssignCode(rawText); return; }
 
-    if (mode === "student_add_name") { handleStudentAddName(rawText); return; }
-    if (mode === "student_add_usn") { handleStudentAddUSN(rawText); return; }
-    if (mode === "student_add_class") { handleStudentAddClass(rawText); return; }
-    if (mode === "student_add_phone") { finalizeAddStudent(rawText); return; }
+    if (mode === "student_add_target") { handleStudentAddTarget(rawText); return; }
+    if (mode === "student_add_input") { handleStudentAddInput(rawText); return; }
     if (mode === "student_remove_select") { handleRemoveStudent(rawText); return; }
 
+    // Direct single-line student add shortcut: e.g. "add student 26BTRGA001 ARJUN SHARMA in CSE-GEN Sem 1 Sec A"
+    if (/\b(add|enroll|register)\s+students?\s+/i.test(t) && /\b(in|to|for|batch|class)\b/i.test(t)) {
+      const parts = rawText.split(/\b(?:in|to|for|batch|class)\b/i);
+      if (parts.length >= 2) {
+        const studentPart = parts[0].replace(/\b(?:add|enroll|register)\s+students?\b/i, "").trim();
+        const classPart = parts.slice(1).join(" ").trim();
+        const targetClass = parseAcademicYearAndClass(classPart, program, semester, section);
+        const parsedList = parseStudentEntries(studentPart, targetClass.program, targetClass.semester, targetClass.section);
+        if (parsedList.length > 0) {
+          setStudentDraft({
+            program: targetClass.program,
+            semester: targetClass.semester,
+            section: targetClass.section,
+            academicYear: targetClass.academicYear
+          });
+          handleStudentAddInput(studentPart);
+          return;
+        }
+      }
+    }
+
+    // Direct single-line faculty add shortcut: e.g. "add faculty Dr. Anand in CSE"
+    if (/\b(add|register)\s+faculty\s+/i.test(t) && /\b(in|to|for|dept|department|branch)\b/i.test(t)) {
+      const parts = rawText.split(/\b(?:in|to|for|dept|department|branch)\b/i);
+      if (parts.length >= 2) {
+        const facName = parts[0].replace(/\b(?:add|register)\s+faculty\b/i, "").trim();
+        const facDept = parts.slice(1).join(" ").trim();
+        if (facName && facDept) {
+          setFacultyDraft({ name: facName, department: facDept });
+          setMode("faculty_add_code");
+          handleFacultyAddName(facName);
+          return;
+        }
+      }
+    }
+
     // Feature 5: Assign Special Code to Teachers
-    if (
-      /\b(feature\s*5|assign\s*(special\s*)?code|teacher\s*code|faculty\s*code|set\s*(special\s*)?code|change\s*(special\s*)?code|update\s*(special\s*)?code)\b/i.test(t) ||
-      (t.includes("code") && (t.includes("teacher") || t.includes("faculty") || t.includes("assign")))
-    ) {
+    if (isAssignCodeCmd) {
       startAssignCodeFlow();
       return;
     }
 
     // Faculty commands
-    if (/\b(add|new|register|create)\s*(faculty|teacher|professor)\b/i.test(t)) {
+    if (isAddFacultyCmd) {
       startAddFacultyFlow();
       return;
     }
-    if (/\b(remove|delete|drop)\s*(faculty|teacher|professor)\b/i.test(t)) {
+    if (isRemoveFacultyCmd) {
       startRemoveFacultyFlow();
       return;
     }
-    if (/\b(list|show|display)\s*(faculty|teachers|professors)\b/i.test(t)) {
+    if (isListFacultyCmd) {
       const all = loadAllFaculty();
       const list = all.slice(0, 10).map((f) => `• **${f.name}** — ${f.department} (\`${f.specialCode}\` · 📱 ${f.phone})`).join("\n");
       addMsg({
         text: `👨‍🏫 **Registered University Faculty (${all.length} total):**\n\n${list}\n\n*(Showing top 10)*`,
         status: "info",
         actions: [
-          { label: "👨‍🏫 Add New Faculty", variant: "primary", fn: startAddFacultyFlow },
+          { label: "👨‍🏫 Add New Faculty", variant: "primary", fn: () => startAddFacultyFlow() },
           { label: "❌ Remove Faculty", variant: "danger", fn: startRemoveFacultyFlow }
         ]
       });
@@ -980,24 +1209,28 @@ export function AdminChatbot({
     }
 
     // Student commands
-    if (/\b(add|new|register|enroll|create)\s*(student)\b/i.test(t)) {
+    if (isAddStudentCmd) {
       startAddStudentFlow();
       return;
     }
-    if (/\b(remove|delete|drop)\s*(student)\b/i.test(t)) {
+    if (isRemoveStudentCmd) {
       startRemoveStudentFlow();
       return;
     }
-    if (/\b(list|show|display)\s*(students?|roster)\b/i.test(t)) {
+    if (isListStudentCmd) {
+      const parsed = parseAcademicYearAndClass(rawText, program, semester, section);
       const all = loadAllStudents();
-      const matching = all.filter((s) => s.program === program && s.semester === semester && s.section === section);
-      const targetList = matching.length > 0 ? matching : all.slice(0, 10);
+      const matching = all.filter((s) => s.program.toUpperCase() === parsed.program.toUpperCase() && s.semester === parsed.semester && s.section.toUpperCase() === parsed.section.toUpperCase());
+      const targetList = matching.length > 0 ? matching : all.slice(0, 15);
       const rows = targetList.map((s) => `• \`${s.usn}\`: **${s.name}** (${s.program} S${s.semester} ${s.section})`).join("\n");
+      const title = matching.length > 0
+        ? `🎓 **Enrolled Students in ${parsed.program} Sem ${parsed.semester} Sec ${parsed.section}** (${matching.length} total):`
+        : `🎓 **Registered Students Roster** (${all.length} total in system, showing ${targetList.length}):`;
       addMsg({
-        text: `🎓 **Enrolled Students in ${program} S${semester} Sec ${section}** (${matching.length || all.length} total):\n\n${rows}`,
+        text: `${title}\n\n${rows}`,
         status: "info",
         actions: [
-          { label: "🎓 Add New Student", variant: "primary", fn: startAddStudentFlow },
+          { label: "🎓 Add Students to This Class", variant: "primary", fn: () => startAddStudentFlow({ program: parsed.program, semester: parsed.semester, section: parsed.section }) },
           { label: "❌ Remove Student", variant: "danger", fn: startRemoveStudentFlow }
         ]
       });
@@ -1005,14 +1238,14 @@ export function AdminChatbot({
     }
 
     // User management summary
-    if (/\b(manage\s*(users?|faculty|students?)|user\s*management)\b/i.test(t)) {
+    if (isManageUsersCmd) {
       addMsg({
-        text: `👥 **JAINEXA User & Credential Controller**\n\nAs Master Administrator, you have complete authority to manage teachers and students:\n\n• **Faculty:** Add new professors, set department, phone and special code for portal authentication.\n• **Students:** Enroll new students with USN and phone, granting immediate access to class timetables & attendance.`,
+        text: `👥 **JAINEXA User & Credential Controller**\n\nAs Master Administrator, you have complete authority to manage teachers and students across all academic years and branches:\n\n• **Faculty:** Add new professors by department & branch, assign phone and unique special code for portal authentication.\n• **Students:** Enroll single students or batch lists for any Academic Year (Freshmen, Sophomores, etc.), branch, and section. Instant access via **USN only**!`,
         status: "info",
         actions: [
-          { label: "👨‍🏫 Add Faculty", variant: "primary", fn: startAddFacultyFlow },
+          { label: "👨‍🏫 Add Faculty", variant: "primary", fn: () => startAddFacultyFlow() },
           { label: "❌ Remove Faculty", variant: "danger", fn: startRemoveFacultyFlow },
-          { label: "🎓 Add Student", variant: "primary", fn: startAddStudentFlow },
+          { label: "🎓 Add Student(s)", variant: "primary", fn: () => startAddStudentFlow() },
           { label: "❌ Remove Student", variant: "danger", fn: startRemoveStudentFlow }
         ]
       });
@@ -1020,21 +1253,21 @@ export function AdminChatbot({
     }
 
     // Schedule class commands
-    if (/\b(add|schedule|create|update|change|modify|assign|new)\s*(session|class|slot|period|timetable|subject|lecture|lab)?\b/i.test(t)) {
+    if (isScheduleCmd) {
       startScheduleFlow();
       return;
     }
 
     // Help
-    if (/\b(help|commands?|usage|what can you)\b/i.test(t)) {
+    if (isHelpCmd) {
       addMsg({
-        text: `**JAINEXA Admin Assistant Guide**\n\n⚡ **1. Class Scheduling:**\n• *"schedule class"* — multi-turn interview for Year, Slot, Subject, Teacher & Room\n• *"publish draft"* / *"revert draft"* / *"reset baseline"*\n\n👨‍🏫 **2. Faculty Operations:**\n• *"add faculty"* — register a new professor with department, phone, and passcode\n• *"remove faculty"* — revoke credentials for any faculty\n• *"list faculty"* — view all registered teachers\n\n🎓 **3. Student Operations:**\n• *"add student"* — enroll student with USN, batch, and phone for 2FA access\n• *"remove student"* — drop student from roster\n• *"list students"* — view class enrollment\n\n🔧 **4. Campus Facilities & Roomware:**\n• *"list issues"* / *"resolve issue in room 105"*\n\n🔑 **5. Feature 5: Assign Teacher Special Code:**\n• *"assign teacher code"* / *"set faculty code"* — assign a unique code to any teacher; teachers must log in with that code ONLY (all bypasses wiped clean)!`,
+        text: `**JAINEXA Admin Assistant Guide**\n\n⚡ **1. Class Scheduling:**\n• *"schedule class"* — multi-turn interview for Year, Slot, Subject, Teacher & Room\n• *"publish draft"* / *"revert draft"* / *"reset baseline"*\n\n👨‍🏫 **2. Faculty Operations:**\n• *"add faculty"* — register a professor by branch/department with phone and passcode\n• *"remove faculty"* — revoke credentials for any faculty\n• *"list faculty"* — view all registered teachers\n\n🎓 **3. Student Operations:**\n• *"add student"* — enroll single student or batch list for any academic year, branch, and class\n• *"remove student"* — drop student from roster\n• *"list students"* — view class enrollment (Login requires **USN only**)\n\n🔧 **4. Campus Facilities & Roomware:**\n• *"list issues"* / *"resolve issue in room 105"*\n\n🔑 **5. Feature 5: Assign Teacher Special Code:**\n• *"assign teacher code"* / *"set faculty code"* — assign a unique code to any teacher; teachers must log in with that code ONLY (all bypasses wiped clean)!`,
         status: "info",
         actions: [
           { label: "⚡ Schedule Class", variant: "primary", fn: () => startScheduleFlow() },
           { label: "🔑 Feature 5: Assign Code", fn: startAssignCodeFlow },
-          { label: "👨‍🏫 Add Faculty", fn: startAddFacultyFlow },
-          { label: "🎓 Add Student", fn: startAddStudentFlow },
+          { label: "👨‍🏫 Add Faculty", fn: () => startAddFacultyFlow() },
+          { label: "🎓 Add Student", fn: () => startAddStudentFlow() },
           { label: "👥 Manage Users", fn: () => handleGeneralCommand("manage users") }
         ]
       });
@@ -1363,6 +1596,11 @@ export function AdminChatbot({
                     <button
                       key={qc.cmd}
                       onClick={() => {
+                        setMode("idle");
+                        setScheduleDraft({ program, semester, section });
+                        setFacultyDraft({});
+                        setStudentDraft({});
+                        setAssignCodeDraft({});
                         handleGeneralCommand(qc.cmd);
                         setTimeout(() => inputRef.current?.focus(), 50);
                       }}
@@ -1462,16 +1700,16 @@ export function AdminChatbot({
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKey}
                       placeholder={
-                        mode === "faculty_add_name"
+                        mode === "student_add_target"
+                          ? "Select or type Class (e.g. 1st Year CSE-GEN Sem 1 Sec A)..."
+                          : mode === "student_add_input"
+                          ? "Type student name(s) or paste list (e.g. 26BTRGA001 ARJUN SHARMA)..."
+                          : mode === "faculty_add_dept"
+                          ? "Type Department or Branch (e.g. Computer Science)..."
+                          : mode === "faculty_add_name"
                           ? "Type Faculty Name (e.g. Dr. Ramesh Kumar)..."
-                          : mode === "faculty_add_phone"
-                          ? "Type 10-digit mobile number..."
-                          : mode === "student_add_name"
-                          ? "Type Student Full Name..."
-                          : mode === "student_add_usn"
-                          ? "Type University USN (e.g. 25BTRGA075)..."
-                          : mode === "student_add_phone"
-                          ? "Type student registered phone..."
+                          : mode === "faculty_add_code"
+                          ? "Type mobile number and special passcode..."
                           : mode.startsWith("schedule")
                           ? "Provide scheduling answer..."
                           : "Type a command or ask anything..."
