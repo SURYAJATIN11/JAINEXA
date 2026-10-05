@@ -38,9 +38,14 @@ import {
   UserPlus,
   UserMinus,
   Users,
-  KeyRound
+  KeyRound,
+  Image as ImageIcon,
+  UploadCloud,
+  ScanLine,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
+import { extractTextFromImage } from "@/lib/ocrScanner";
 import {
   loadClassSchedule,
   saveDraftSession,
@@ -104,6 +109,7 @@ export interface ChatMsg {
   ts: Date;
   status?: "ok" | "error" | "warning" | "info";
   actions?: ChatAction[];
+  imageUrl?: string;
 }
 
 export interface AdminChatbotProps {
@@ -377,11 +383,17 @@ export function AdminChatbot({
   const [studentDraft, setStudentDraft] = useState<StudentWizardDraft>({});
   const [assignCodeDraft, setAssignCodeDraft] = useState<{ facultyId?: string; facultyName?: string; phone?: string; currentCode?: string }>({});
 
+  // Image & OCR Scanner state
+  const [attachedImage, setAttachedImage] = useState<{ file: File; dataUrl: string; name: string } | null>(null);
+  const [isScanningImage, setIsScanningImage] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       id: uid(),
       role: "assistant",
-      text: `👋 Hello **${adminName}**! I am your **Master Admin AI Controller**.\n\nEverything in the portal can be managed directly here in the chat:\n• ⚡ **Interactive Class Scheduling** (Year, Slot, Subject, Teacher, Room)\n• 👨‍🏫 **Add & Remove Faculty Members** (Instant portal credentials & assignments)\n• 🎓 **Add & Remove Students** (Instant roster enrollment & 2FA mobile sign-in)\n• 🔧 **Campus Facility & Roomware Operations** (Verified Session Faults & Universal Resolution)\n• 🔑 **Feature 5: Assign Special Code to Teachers** (Teachers must log in with this assigned code ONLY)\n\nPick a quick action below or type any command!`,
+      text: `👋 Hello **${adminName}**! I am your **Master Admin AI Controller**.\n\nEverything in the portal can be managed directly here in the chat:\n• ⚡ **Interactive Class Scheduling** (Year, Slot, Subject, Teacher, Room)\n• 📸 **Upload Pictures of Student Lists** (Instant AI OCR extraction & roster enrollment)\n• 👨‍🏫 **Add & Remove Faculty Members** (Instant portal credentials & assignments)\n• 🎓 **Add & Remove Students** (Instant roster enrollment & live authentication)\n• 🔑 **Feature 5: Assign Special Code to Teachers** (Teachers must log in with this assigned code ONLY)\n\nPick a quick action below or attach a photo of your student list!`,
       ts: new Date(),
       status: "info"
     }
@@ -398,6 +410,7 @@ export function AdminChatbot({
       ts: new Date(),
       status: partial.status,
       actions: partial.actions,
+      imageUrl: partial.imageUrl,
     };
     setMessages((prev) => [...prev, msg]);
   }, []);
@@ -423,6 +436,7 @@ export function AdminChatbot({
     setFacultyDraft({});
     setStudentDraft({});
     setAssignCodeDraft({});
+    setAttachedImage(null);
     setScheduleDraft({ program, semester, section });
     addMsg({
       text: "❌ Action cancelled. How else can I assist you?",
@@ -979,8 +993,12 @@ export function AdminChatbot({
       status: "info",
       actions: [
         {
-          label: `⚡ Auto Batch (3 Sample Students)`,
+          label: "📸 Upload Picture of List",
           variant: "primary",
+          fn: () => fileInputRef.current?.click()
+        },
+        {
+          label: `⚡ Auto Batch (3 Sample Students)`,
           fn: () => handleStudentAddInput(sampleBatch)
         },
         {
@@ -1037,8 +1055,12 @@ export function AdminChatbot({
       status: "ok",
       actions: [
         {
-          label: "🎓 Add More Students",
+          label: "📸 Upload Another Picture",
           variant: "primary",
+          fn: () => fileInputRef.current?.click()
+        },
+        {
+          label: "🎓 Add More Students",
           fn: () => startAddStudentFlow({ program: targetProgram, semester: targetSemester, section: targetSection, academicYear })
         },
         {
@@ -1055,6 +1077,198 @@ export function AdminChatbot({
       ]
     });
   };
+
+  /* ─────────────── 3B. OCR PICTURE SCANNER & ENROLLMENT ─────────────── */
+
+  const processStudentListImage = useCallback(
+    async (
+      file: File | Blob,
+      dataUrl: string,
+      customTarget?: { program?: string; semester?: string; section?: string; academicYear?: string }
+    ) => {
+      const targetProgram = customTarget?.program || studentDraft.program || program;
+      const targetSemester = customTarget?.semester || studentDraft.semester || semester;
+      const targetSection = customTarget?.section || studentDraft.section || section;
+      const academicYear = customTarget?.academicYear || studentDraft.academicYear || getAcademicYearFromSemester(targetSemester);
+
+      const fileName = (file as File).name || "student_list.jpg";
+
+      // 1. Show user message with picture thumbnail
+      addMsg({
+        role: "user",
+        text: `📸 **Uploaded Picture of Student List** (\`${fileName}\`)`,
+        imageUrl: dataUrl
+      });
+
+      // 2. Assistant scanning indicator
+      const scanMsgId = uid();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: scanMsgId,
+          role: "assistant",
+          text: `🔍 **Scanning Picture with AI OCR Engine...**\nAnalyzing image for student names, USNs, and roll numbers...\nTarget Class: **${academicYear} · ${targetProgram} S${targetSemester} Sec ${targetSection}**`,
+          ts: new Date(),
+          status: "info"
+        }
+      ]);
+
+      setIsScanningImage(true);
+
+      try {
+        const ocrResult = await extractTextFromImage(dataUrl, (p) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === scanMsgId
+                ? {
+                    ...m,
+                    text: `🔍 **Scanning Picture with AI OCR Engine (${p.progress}%)...**\n${p.status}\nTarget Class: **${academicYear} · ${targetProgram} S${targetSemester} Sec ${targetSection}**`
+                  }
+                : m
+            )
+          );
+        });
+
+        setIsScanningImage(false);
+
+        if (!ocrResult.success || !ocrResult.text.trim()) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === scanMsgId
+                ? {
+                    ...m,
+                    status: "warning",
+                    text: `⚠️ **Could not read clear text from this picture.**\n${ocrResult.error || "The image might be blurry, dark, or low contrast."}\n\nPlease try uploading a clearer, higher-resolution photo or paste student names directly.`,
+                    actions: [
+                      { label: "📸 Try Another Picture", variant: "primary", fn: () => fileInputRef.current?.click() },
+                      { label: "✍️ Enter Names Manually", fn: () => startAddStudentFlow({ program: targetProgram, semester: targetSemester, section: targetSection, academicYear }) }
+                    ]
+                  }
+                : m
+            )
+          );
+          return;
+        }
+
+        const rawText = ocrResult.text.trim();
+
+        // Check if image text mentions specific class/branch
+        const inferred = parseAcademicYearAndClass(rawText, targetProgram, targetSemester, targetSection);
+        const finalProg = inferred.program || targetProgram;
+        const finalSem = inferred.semester || targetSemester;
+        const finalSec = inferred.section || targetSection;
+        const finalYear = inferred.academicYear || academicYear;
+
+        const parsedStudents = parseStudentEntries(rawText, finalProg, finalSem, finalSec);
+
+        if (parsedStudents.length === 0) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === scanMsgId
+                ? {
+                    ...m,
+                    status: "warning",
+                    text: `📄 **OCR Read the Image, but could not detect distinct student names:**\n\nExtracted Text:\n\`\`\`text\n${rawText.slice(0, 400)}${rawText.length > 400 ? "..." : ""}\n\`\`\`\n\nYou can copy and paste the names into chat or upload another picture:`,
+                    actions: [
+                      { label: "📸 Upload Another Picture", variant: "primary", fn: () => fileInputRef.current?.click() },
+                      { label: "✍️ Enter Names Manually", fn: () => startAddStudentFlow({ program: finalProg, semester: finalSem, section: finalSec, academicYear: finalYear }) }
+                    ]
+                  }
+                : m
+            )
+          );
+          return;
+        }
+
+        const res = addMultipleStudents(parsedStudents);
+        setMode("idle");
+        setStudentDraft({});
+
+        toast.success(`OCR Extracted & Enrolled ${res.totalAdded} student(s) from picture!`);
+
+        const previewList = res.added.slice(0, 8).map((s) => `• \`${s.usn}\`: **${s.name}**`).join("\n");
+        const moreCount = res.totalAdded > 8 ? `\n*...and ${res.totalAdded - 8} more students*` : "";
+        const existingNote = res.existing.length > 0 ? `\n\n*(Note: ${res.existing.length} existing USN(s) were skipped)*` : "";
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === scanMsgId
+              ? {
+                  ...m,
+                  status: "ok",
+                  text: `🎉 **Successfully Extracted & Enrolled ${res.totalAdded} Student(s) from Picture!**\n\n• 🎓 **Academic Year:** ${finalYear}\n• 🏫 **Class:** **${finalProg} · Semester ${finalSem} · Section ${finalSec}**\n• 👥 **Enrolled Students (${parsedStudents.length} recognized):**\n${previewList}${moreCount}${existingNote}\n\n✅ **Instant Student Login:**\nOnly the student's **USN** is required for login. All recognized students can now log in immediately on the student portal using their assigned USN!`,
+                  actions: [
+                    {
+                      label: "📸 Upload Another Picture",
+                      variant: "primary",
+                      fn: () => fileInputRef.current?.click()
+                    },
+                    {
+                      label: `📋 View Roster (${finalProg} S${finalSem} ${finalSec})`,
+                      fn: () => handleGeneralCommand(`list students in ${finalProg} ${finalSem} ${finalSec}`)
+                    },
+                    {
+                      label: `🔄 Switch Studio View to ${finalProg} S${finalSem} ${finalSec}`,
+                      fn: () => {
+                        onClassSwitch?.(finalProg, finalSem, finalSec);
+                        toast.success(`Switched studio view to ${finalProg} S${finalSem} Sec ${finalSec}`);
+                      }
+                    }
+                  ]
+                }
+              : m
+          )
+        );
+      } catch (err: any) {
+        setIsScanningImage(false);
+        console.error("OCR Image processing failed:", err);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === scanMsgId
+              ? {
+                  ...m,
+                  status: "error",
+                  text: `❌ Error processing picture with OCR: ${err?.message || "Unknown error"}. Please try again with a clear photo.`
+                }
+              : m
+          )
+        );
+      }
+    },
+    [studentDraft, program, semester, section, addMsg, onClassSwitch]
+  );
+
+  const handleImageFile = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload a valid image (PNG, JPG, WEBP)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setAttachedImage({ file, dataUrl, name: file.name });
+      toast.success(`Picture "${file.name}" attached! Click Send or Scan & Enroll to extract students.`);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          const file = items[i].getAsFile();
+          if (file) {
+            handleImageFile(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    },
+    [handleImageFile]
+  );
 
   const startRemoveStudentFlow = useCallback(() => {
     setMode("student_remove_select");
@@ -1177,6 +1391,13 @@ export function AdminChatbot({
           return;
         }
       }
+    }
+
+    // Picture scan command
+    if (/\b(scan\s*(picture|image|photo|pic|roster|list)?|upload\s*(picture|image|photo|pic)|attach\s*(picture|image|photo))\b/i.test(t)) {
+      fileInputRef.current?.click();
+      toast.info("Select or take a picture of your student list to scan with OCR.");
+      return;
     }
 
     // Feature 5: Assign Special Code to Teachers
@@ -1410,6 +1631,15 @@ export function AdminChatbot({
   /* ─────────────── SEND HANDLER ─────────────── */
 
   const handleSend = useCallback(async () => {
+    // If a picture is attached, process it with OCR!
+    if (attachedImage) {
+      const img = attachedImage;
+      setAttachedImage(null);
+      await processStudentListImage(img.file, img.dataUrl);
+      setInput("");
+      return;
+    }
+
     const text = input.trim();
     if (!text) return;
 
@@ -1422,7 +1652,7 @@ export function AdminChatbot({
     setIsTyping(false);
 
     handleGeneralCommand(text);
-  }, [input, handleGeneralCommand]);
+  }, [attachedImage, input, processStudentListImage, handleGeneralCommand]);
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1433,6 +1663,7 @@ export function AdminChatbot({
 
   const clearHistory = () => {
     setMode("idle");
+    setAttachedImage(null);
     setMessages([
       {
         id: uid(),
@@ -1442,6 +1673,7 @@ export function AdminChatbot({
         status: "info",
         actions: [
           { label: "⚡ Schedule Class", variant: "primary", fn: () => startScheduleFlow() },
+          { label: "📸 Scan Picture", fn: () => fileInputRef.current?.click() },
           { label: "🔑 Assign Teacher Code", fn: startAssignCodeFlow },
           { label: "👨‍🏫 Add Faculty", fn: startAddFacultyFlow },
           { label: "🎓 Add Student", fn: startAddStudentFlow }
@@ -1479,6 +1711,7 @@ export function AdminChatbot({
 
   const QUICK_COMMANDS = [
     { label: "⚡ Schedule Class", cmd: "schedule class" },
+    { label: "📸 Scan Picture", cmd: "scan picture" },
     { label: "🔑 Feature 5: Assign Code", cmd: "assign teacher code" },
     { label: "👨‍🏫 Add Faculty", cmd: "add faculty" },
     { label: "🎓 Add Student", cmd: "add student" },
@@ -1516,13 +1749,43 @@ export function AdminChatbot({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 350, damping: 28 }}
-            className="fixed bottom-5 right-5 z-50 flex flex-col shadow-2xl border border-slate-300 rounded-2xl bg-white overflow-hidden"
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) handleImageFile(file);
+            }}
+            onPaste={handlePaste}
+            className="fixed bottom-5 right-5 z-50 flex flex-col shadow-2xl border border-slate-300 rounded-2xl bg-white overflow-hidden relative"
             style={{
               width: isMinimized ? "300px" : "420px",
               height: isMinimized ? "auto" : "580px",
               maxHeight: "88vh",
             }}
           >
+            {/* Hidden File Input for Picture Upload */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageFile(file);
+                e.target.value = "";
+              }}
+            />
+
+            {/* Drag & Drop Visual Overlay */}
+            {isDragOver && (
+              <div className="absolute inset-0 bg-[#0a1e3a]/90 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-white p-5 text-center border-2 border-dashed border-[#e5a00d] rounded-2xl pointer-events-none">
+                <UploadCloud className="w-12 h-12 text-[#e5a00d] mb-2 animate-bounce" />
+                <p className="font-bold text-sm">Drop Student List Picture Here</p>
+                <p className="text-[11px] text-slate-200 mt-1">Automatic AI OCR will scan names & USNs</p>
+              </div>
+            )}
             {/* ── Header ── */}
             <div className="bg-[#0a1e3a] text-white px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
               <div className="flex items-center gap-2.5">
@@ -1647,6 +1910,18 @@ export function AdminChatbot({
                             : "bg-white text-slate-900 border border-slate-200 rounded-tl-xs"
                         }`}
                       >
+                        {/* Image Preview if message includes a photo */}
+                        {msg.imageUrl && (
+                          <div className="mb-2 overflow-hidden rounded-xl border border-black/10 bg-black/5">
+                            <img
+                              src={msg.imageUrl}
+                              alt="Uploaded student list picture"
+                              className="max-h-52 w-auto max-w-full rounded-lg object-contain cursor-pointer hover:opacity-95 transition-opacity"
+                              onClick={() => window.open(msg.imageUrl, "_blank")}
+                            />
+                          </div>
+                        )}
+
                         {renderText(msg.text)}
 
                         {/* Action Buttons */}
@@ -1693,17 +1968,67 @@ export function AdminChatbot({
 
                 {/* Input Area */}
                 <div className="border-t border-slate-200 px-3.5 py-3 shrink-0 bg-white">
+                  {/* Attached Image Preview Card */}
+                  {attachedImage && (
+                    <div className="flex items-center gap-2 mb-2 p-1.5 bg-purple-50/80 border border-purple-200 rounded-xl">
+                      <img
+                        src={attachedImage.dataUrl}
+                        alt="Attached preview"
+                        className="w-9 h-9 object-cover rounded-lg border border-purple-300 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-purple-950 truncate">{attachedImage.name}</p>
+                        <p className="text-[9.5px] text-purple-700 font-medium flex items-center gap-1">
+                          <ScanLine className="w-3 h-3 text-purple-600" /> Ready to scan with AI OCR
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const img = attachedImage;
+                          setAttachedImage(null);
+                          processStudentListImage(img.file, img.dataUrl);
+                        }}
+                        disabled={isScanningImage}
+                        className="px-2.5 py-1 bg-[#0a1e3a] hover:bg-[#153460] text-white text-[10px] rounded-lg font-semibold cursor-pointer shadow-2xs"
+                      >
+                        {isScanningImage ? "Scanning..." : "Scan & Enroll"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedImage(null)}
+                        className="p-1 text-slate-400 hover:text-red-500 cursor-pointer"
+                        title="Remove picture"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
+                    {/* Picture Upload Button */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isScanningImage}
+                      title="Upload picture of student list (PNG, JPG, screenshot)"
+                      className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#0a1e3a] flex items-center justify-center cursor-pointer transition-colors shrink-0 border border-slate-200 shadow-2xs"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+
                     <input
                       ref={inputRef}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKey}
                       placeholder={
-                        mode === "student_add_target"
-                          ? "Select or type Class (e.g. 1st Year CSE-GEN Sem 1 Sec A)..."
+                        attachedImage
+                          ? "Press Enter or click 'Scan & Enroll' to extract students..."
+                          : mode === "student_add_target"
+                          ? "Select or type Class (or upload picture)..."
                           : mode === "student_add_input"
-                          ? "Type student name(s) or paste list (e.g. 26BTRGA001 ARJUN SHARMA)..."
+                          ? "Paste list or click Camera button to upload picture..."
                           : mode === "faculty_add_dept"
                           ? "Type Department or Branch (e.g. Computer Science)..."
                           : mode === "faculty_add_name"
@@ -1712,23 +2037,24 @@ export function AdminChatbot({
                           ? "Type mobile number and special passcode..."
                           : mode.startsWith("schedule")
                           ? "Provide scheduling answer..."
-                          : "Type a command or ask anything..."
+                          : "Type a command, ask anything, or attach a picture..."
                       }
                       className="flex-1 text-[11.5px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-[#0a1e3a] focus:ring-1 focus:ring-[#0a1e3a]/20 placeholder:text-slate-400 transition-all font-sans"
                     />
+
                     <button
                       onClick={handleSend}
-                      disabled={!input.trim()}
+                      disabled={!input.trim() && !attachedImage}
                       className="w-8 h-8 rounded-xl bg-[#0a1e3a] hover:bg-[#142e54] text-white disabled:opacity-40 flex items-center justify-center cursor-pointer transition-colors shrink-0 shadow-2xs"
                     >
-                      <Send className="w-4 h-4" />
+                      {isScanningImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     </button>
                   </div>
                   <div className="flex items-center justify-between text-[9px] text-slate-400 mt-1.5 px-0.5">
                     <span>
                       Active: <strong className="text-slate-600 font-semibold">{program} S{semester} Sec {section}</strong>
                     </span>
-                    <span>Press <kbd className="px-1 py-0.2 bg-slate-100 rounded border border-slate-200 text-[8px]">Enter</kbd> to submit</span>
+                    <span>Paste <kbd className="px-1 py-0.2 bg-slate-100 rounded border border-slate-200 text-[8px]">Ctrl+V</kbd> screenshot or drop image</span>
                   </div>
                 </div>
               </>
