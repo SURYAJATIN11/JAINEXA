@@ -32,16 +32,16 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
   const [activeTab, setActiveTab] = useState<"admin" | "faculty" | "student">("admin");
 
   // Student inputs
-  const [studentPhone, setStudentPhone] = useState("9845010001");
-  const [studentUsn, setStudentUsn] = useState("25BTRGA001");
+  const [studentPhone, setStudentPhone] = useState("");
+  const [studentUsn, setStudentUsn] = useState("");
 
   // Faculty inputs
-  const [facultyPhone, setFacultyPhone] = useState("6353572133");
-  const [facultyCode, setFacultyCode] = useState("JGI-FAC-6353");
+  const [facultyPhone, setFacultyPhone] = useState("");
+  const [facultyCode, setFacultyCode] = useState("");
 
   // Admin inputs
-  const [adminId, setAdminId] = useState("admin");
-  const [adminPass, setAdminPass] = useState("admin123");
+  const [adminId, setAdminId] = useState("");
+  const [adminPass, setAdminPass] = useState("");
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -213,12 +213,12 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
 
                 <div>
                   <label className="block text-[11px] font-bold text-[#5e5a61] uppercase tracking-wider mb-1.5">
-                    Admin Phone / Username
+                    Admin Username / ID
                   </label>
                   <div className="relative">
                     <Input
                       type="text"
-                      placeholder="admin or 9999999999"
+                      placeholder="Enter Admin ID"
                       value={adminId}
                       onChange={(e) => setAdminId(e.target.value)}
                       className="text-xs bg-[#faf8f2] border-[#ded9cc]"
@@ -233,7 +233,7 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
                   </label>
                   <Input
                     type="password"
-                    placeholder="Enter master password (112146)"
+                    placeholder="Enter Master Password"
                     value={adminPass}
                     onChange={(e) => setAdminPass(e.target.value)}
                     className="text-xs bg-[#faf8f2] border-[#ded9cc]"
@@ -245,13 +245,13 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
                   <button
                     type="button"
                     onClick={() => {
-                      setAdminId("admin");
-                      setAdminPass("112146");
+                      setAdminId("JATIN2007");
+                      setAdminPass("11042007");
                       setError("");
                     }}
                     className="text-[11px] text-[#33409a] font-semibold hover:underline"
                   >
-                    Autofill: admin / 112146
+                    Master Admin Quick Fill (JATIN2007 / 11042007)
                   </button>
                 </div>
 

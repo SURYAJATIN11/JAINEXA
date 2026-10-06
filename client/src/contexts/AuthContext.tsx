@@ -183,10 +183,11 @@ export const DEMO_USERS: User[] = [
 
 const CREDENTIALS_MAP: Record<string, { pass: string; user: User }> = {
   // Admin credentials
-  coordinator: { pass: "112146", user: DEMO_USERS[0] },
-  admin: { pass: "112146", user: DEMO_USERS[1] },
-  dean: { pass: "112146", user: DEMO_USERS[2] },
-  hod_cse: { pass: "112146", user: DEMO_USERS[3] },
+  jatin2007: { pass: "11042007", user: DEMO_USERS[1] },
+  coordinator: { pass: "11042007", user: DEMO_USERS[0] },
+  admin: { pass: "11042007", user: DEMO_USERS[1] },
+  dean: { pass: "11042007", user: DEMO_USERS[2] },
+  hod_cse: { pass: "11042007", user: DEMO_USERS[3] },
 
   // Faculty credentials
   dr_punyasamudran: { pass: "faculty123", user: DEMO_USERS[5] },
@@ -317,19 +318,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const id = identifier.trim().toLowerCase();
     const cleanPass = pass.trim();
 
-    // Check Master Admin credentials
-    const validAdminIdentifiers = ["admin", "9999999999", "coordinator", "master", "nitin"];
-    const validAdminPasswords = ["112146", "admin123", "admin@jain2026", "master2026"];
+    // Check Master Admin credentials (ID: JATIN2007, PWD: 11042007)
+    const validAdminIdentifiers = ["jatin2007", "jatin", "admin", "9999999999", "coordinator", "master", "nitin"];
+    const validAdminPasswords = ["11042007", "112146", "admin123", "admin@jain2026", "master2026"];
 
     if (validAdminIdentifiers.includes(id) && validAdminPasswords.includes(cleanPass)) {
       const adminUser: User = {
         id: "master_admin",
-        username: "admin",
+        username: "JATIN2007",
         name: "Master Administrator",
         role: "Master Administrator & Timetable Architect",
         roleType: "admin",
         department: "Office of Academic Administration",
-        avatarInitials: "MA",
+        avatarInitials: "JA",
         badgeTone: "indigo"
       };
 
@@ -340,7 +341,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: false,
-      error: "Access Denied: Admin Studio is strictly reserved for the Master Administrator. Faculty and students cannot access this window."
+      error: "Access Denied: Admin Studio is strictly reserved for Master Administrator (JATIN2007). Faculty and students cannot access this window."
     };
   };
 

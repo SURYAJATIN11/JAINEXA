@@ -576,7 +576,7 @@ export default function CoverLoginPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        const res = loginAdmin("admin", "112146");
+                        const res = loginAdmin("JATIN2007", "11042007");
                         if (res.success) {
                           toast.success("Logged in as Master Administrator");
                           setLocation("/admin");

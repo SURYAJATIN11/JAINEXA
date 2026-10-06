@@ -38,8 +38,8 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
   const [facultyCode, setFacultyCode] = useState("JGI-FAC-6353");
 
   // Admin form state
-  const [adminId, setAdminId] = useState("admin");
-  const [adminPass, setAdminPass] = useState("112146");
+  const [adminId, setAdminId] = useState("JATIN2007");
+  const [adminPass, setAdminPass] = useState("11042007");
 
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -361,7 +361,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                     type="text"
                     value={adminId}
                     onChange={(e) => setAdminId(e.target.value)}
-                    placeholder="admin or registered mobile number"
+                    placeholder="Master Admin ID (JATIN2007)"
                     className="pl-9 text-xs bg-[#faf8f2] border-[#ded9cb]"
                     required
                   />
@@ -378,7 +378,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                     type="password"
                     value={adminPass}
                     onChange={(e) => setAdminPass(e.target.value)}
-                    placeholder="Master password (112146)"
+                    placeholder="Master password (11042007)"
                     className="pl-9 text-xs bg-[#faf8f2] border-[#ded9cb]"
                     required
                   />
@@ -390,13 +390,13 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    setAdminId("admin");
-                    setAdminPass("112146");
+                    setAdminId("JATIN2007");
+                    setAdminPass("11042007");
                     setErrorMsg("");
                   }}
                   className="text-[11px] text-[#33409a] font-semibold hover:underline cursor-pointer"
                 >
-                  Autofill Master Admin Credentials (admin / 112146)
+                  Autofill Master Admin Credentials (JATIN2007 / 11042007)
                 </button>
               </div>
 
