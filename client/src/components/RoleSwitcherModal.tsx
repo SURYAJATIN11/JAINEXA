@@ -16,8 +16,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { CSE_GEN_SECTION_F_STUDENTS, getStudentRegisteredPhone } from "@/data/studentsData";
-import { REGISTERED_FACULTY } from "@/data/facultyAuthData";
 
 interface RoleSwitcherModalProps {
   isOpen: boolean;
@@ -30,16 +28,16 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
   const [activeTab, setActiveTab] = useState<"student" | "faculty" | "admin">("student");
 
   // Student form state
-  const [studentPhone, setStudentPhone] = useState("9845010001");
-  const [studentUsn, setStudentUsn] = useState("25BTRGA001");
+  const [studentPhone, setStudentPhone] = useState("");
+  const [studentUsn, setStudentUsn] = useState("");
 
   // Faculty form state
-  const [facultyPhone, setFacultyPhone] = useState("6353572133");
-  const [facultyCode, setFacultyCode] = useState("JGI-FAC-6353");
+  const [facultyPhone, setFacultyPhone] = useState("");
+  const [facultyCode, setFacultyCode] = useState("");
 
   // Admin form state
-  const [adminId, setAdminId] = useState("JATIN2007");
-  const [adminPass, setAdminPass] = useState("11042007");
+  const [adminId, setAdminId] = useState("");
+  const [adminPass, setAdminPass] = useState("");
 
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -231,28 +229,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                 </div>
               </div>
 
-              {/* Quick autofill chips for Section F students */}
-              <div>
-                <span className="text-[10px] font-bold text-[#88848a] uppercase tracking-wider block mb-1.5">
-                  Quick Demo Student Logins (Section F):
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {CSE_GEN_SECTION_F_STUDENTS.slice(0, 4).map((st) => (
-                    <button
-                      type="button"
-                      key={st.usn}
-                      onClick={() => {
-                        setStudentUsn(st.usn);
-                        setStudentPhone(getStudentRegisteredPhone(st.usn));
-                        setErrorMsg("");
-                      }}
-                      className="px-2 py-1 rounded bg-[#f0ede4] hover:bg-[#e4dfd2] text-[11px] font-medium text-[#252b67] border border-[#ded9cb] transition"
-                    >
-                      {st.usn} ({st.name.split(" ")[0]})
-                    </button>
-                  ))}
-                </div>
-              </div>
+
 
               <Button
                 type="submit"
@@ -308,28 +285,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                 </div>
               </div>
 
-              {/* Quick autofill chips for Registered Faculty */}
-              <div>
-                <span className="text-[10px] font-bold text-[#88848a] uppercase tracking-wider block mb-1.5">
-                  Registered University Faculty:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {REGISTERED_FACULTY.slice(0, 4).map((fac) => (
-                    <button
-                      type="button"
-                      key={fac.id}
-                      onClick={() => {
-                        setFacultyPhone(fac.phone);
-                        setFacultyCode(fac.specialCode);
-                        setErrorMsg("");
-                      }}
-                      className="px-2 py-1 rounded bg-[#fdf5df] hover:bg-[#f6e9c6] text-[11px] font-medium text-[#7d5c0e] border border-[#f0deae] transition"
-                    >
-                      {fac.name.split(" ")[1] || fac.name} ({fac.specialCode})
-                    </button>
-                  ))}
-                </div>
-              </div>
+
 
               <Button
                 type="submit"
@@ -385,20 +341,7 @@ export function RoleSwitcherModal({ isOpen, onClose }: RoleSwitcherModalProps) {
                 </div>
               </div>
 
-              {/* Master Admin Autofill */}
-              <div className="flex items-center justify-between text-xs pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdminId("JATIN2007");
-                    setAdminPass("11042007");
-                    setErrorMsg("");
-                  }}
-                  className="text-[11px] text-[#33409a] font-semibold hover:underline cursor-pointer"
-                >
-                  Autofill Master Admin Credentials (JATIN2007 / 11042007)
-                </button>
-              </div>
+
 
               <Button
                 type="submit"

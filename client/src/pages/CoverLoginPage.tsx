@@ -14,7 +14,6 @@ import {
   Lock,
   ArrowRight,
   AlertCircle,
-  Zap,
   MapPin,
   Lightbulb,
   Target,
@@ -533,64 +532,7 @@ export default function CoverLoginPage() {
                   </form>
                 )}
 
-                {/* 1-Click Fast Login Pills */}
-                <div className="mt-4 pt-3 border-t border-slate-100">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2 text-left">
-                    QUICK ONE-CLICK SIGN-IN
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const res = loginStudent("9845010001", "25BTRGA001");
-                        if (res.success) {
-                          toast.success("Logged in as Student");
-                          setLocation("/timetable");
-                        }
-                      }}
-                      className="p-2 rounded-xl bg-slate-50 hover:bg-amber-50/80 text-slate-800 border border-slate-200/90 text-center transition-all shadow-2xs cursor-pointer flex flex-col items-center justify-center"
-                    >
-                      <div className="flex items-center gap-1 text-xs font-semibold text-[#0a1e3a]">
-                        <Zap className="w-3 h-3 text-blue-600 fill-blue-600" />
-                        <span>Student</span>
-                      </div>
-                    </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const res = loginFaculty("6353572133", facultyCode || "JGI-FAC-6353");
-                        if (res.success) {
-                          toast.success("Logged in as Faculty");
-                          setLocation("/timetable");
-                        }
-                      }}
-                      className="p-2 rounded-xl bg-slate-50 hover:bg-amber-50/80 text-slate-800 border border-slate-200/90 text-center transition-all shadow-2xs cursor-pointer flex flex-col items-center justify-center"
-                    >
-                      <div className="flex items-center gap-1 text-xs font-semibold text-[#0a1e3a]">
-                        <Zap className="w-3 h-3 text-amber-600 fill-amber-600" />
-                        <span>Teacher</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const res = loginAdmin("JATIN2007", "11042007");
-                        if (res.success) {
-                          toast.success("Logged in as Master Administrator");
-                          setLocation("/admin");
-                        }
-                      }}
-                      className="p-2 rounded-xl bg-slate-50 hover:bg-amber-50/80 text-slate-800 border border-slate-200/90 text-center transition-all shadow-2xs cursor-pointer flex flex-col items-center justify-center"
-                    >
-                      <div className="flex items-center gap-1 text-xs font-semibold text-[#0a1e3a]">
-                        <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
-                        <span>Master Admin</span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
               </div>
 
               {/* 4 Feature Cards on Mobile Viewports (< lg) */}

@@ -17,8 +17,6 @@ import {
   Info
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { CSE_GEN_SECTION_F_STUDENTS, getStudentRegisteredPhone } from "@/data/studentsData";
-import { REGISTERED_FACULTY } from "@/data/facultyAuthData";
 import { toast } from "sonner";
 
 interface AdminLoginProps {
@@ -241,19 +239,7 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
                   />
                 </div>
 
-                <div className="pt-1 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdminId("JATIN2007");
-                      setAdminPass("11042007");
-                      setError("");
-                    }}
-                    className="text-[11px] text-[#33409a] font-semibold hover:underline"
-                  >
-                    Master Admin Quick Fill (JATIN2007 / 11042007)
-                  </button>
-                </div>
+
 
                 <Button
                   type="submit"
@@ -311,27 +297,7 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
                   </div>
                 </div>
 
-                <div className="pt-1">
-                  <span className="text-[10px] text-[#88848a] font-bold uppercase block mb-1">
-                    Demo Faculty Autofill:
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {REGISTERED_FACULTY.slice(0, 3).map((f) => (
-                      <button
-                        type="button"
-                        key={f.id}
-                        onClick={() => {
-                          setFacultyPhone(f.phone);
-                          setFacultyCode(f.specialCode);
-                          setError("");
-                        }}
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#fdf5df] text-[#7d5c0e] border border-[#f0deae]"
-                      >
-                        {f.name.split(" ")[1] || f.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+
 
                 <Button
                   type="submit"
@@ -392,27 +358,7 @@ export default function AdminLogin({ onSuccess }: AdminLoginProps) {
                   </span>
                 </div>
 
-                <div className="pt-1">
-                  <span className="text-[10px] text-[#88848a] font-bold uppercase block mb-1">
-                    Demo Student Autofill:
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {CSE_GEN_SECTION_F_STUDENTS.slice(0, 3).map((st) => (
-                      <button
-                        type="button"
-                        key={st.usn}
-                        onClick={() => {
-                          setStudentUsn(st.usn);
-                          setStudentPhone(getStudentRegisteredPhone(st.usn));
-                          setError("");
-                        }}
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#f0ede4] text-[#252b67] border border-[#ded9cb]"
-                      >
-                        {st.usn}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+
 
                 <Button
                   type="submit"
