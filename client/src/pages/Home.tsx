@@ -28,6 +28,7 @@ import AttendancePortalPanel from "@/components/AttendancePortalPanel";
 import AttendanceAccessRestricted from "@/components/AttendanceAccessRestricted";
 import BuildingFloorPlanPanel from "@/components/BuildingFloorPlanPanel";
 import RoomwarePanel from "@/components/RoomwarePanel";
+import AcademicCalendarPanel from "@/components/AcademicCalendarPanel";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { RoleSwitcherModal } from "@/components/RoleSwitcherModal";
 import { AppSidebar, NavItemKey } from "@/components/AppSidebar";
@@ -49,7 +50,7 @@ import {
   extractRoomCode
 } from "@/lib/roomwareStore";
 
-type View = "student" | "faculty" | "rooms" | "conflicts" | "attendance" | "floor-plan" | "roomware";
+type View = "student" | "faculty" | "rooms" | "conflicts" | "attendance" | "floor-plan" | "roomware" | "calendar";
 type Session = StoredSession;
 
 const slots = ["1", "2", "3", "4", "5", "6", "7", "8"];
@@ -240,6 +241,8 @@ export default function Home() {
       window.location.hash = "attendance-portal";
     } else if (v === "faculty") {
       window.location.hash = "faculty-timetable";
+    } else if (v === "calendar") {
+      window.location.hash = "academic-calendar";
     } else if (v === "roomware") {
       window.location.hash = "roomware";
     } else if (v === "floor-plan" || v === "rooms") {
@@ -249,7 +252,7 @@ export default function Home() {
     }
   };
 
-  // URL hash synchronization for #faculty-timetable, #batch-timetable, #attendance-portal, #building-floor-plan, #roomware, #feedback-24x7
+  // URL hash synchronization for #faculty-timetable, #batch-timetable, #attendance-portal, #academic-calendar, #building-floor-plan, #roomware, #feedback-24x7
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
@@ -257,6 +260,8 @@ export default function Home() {
         setView("attendance");
       } else if (hash === "#faculty-timetable") {
         setView("faculty");
+      } else if (hash === "#academic-calendar" || hash === "#calendar") {
+        setView("calendar");
       } else if (hash === "#building-floor-plan" || hash === "#rooms") {
         setView("floor-plan");
       } else if (hash === "#roomware") {
@@ -294,6 +299,7 @@ export default function Home() {
           if (
             navKey === "student" ||
             navKey === "faculty" ||
+            navKey === "calendar" ||
             navKey === "attendance" ||
             navKey === "floor-plan" ||
             navKey === "roomware"
@@ -316,7 +322,19 @@ export default function Home() {
           <div className="crumb min-w-0">
             <span className="hidden sm:inline">Workspace</span>
             <ChevronRight size={14} className="hidden sm:inline shrink-0" />
-            <strong className="truncate">{program} · Sem {semester} ({currentYear.split(" ")[0]}) · Sec {section}</strong>
+            <strong className="truncate">
+              {view === "calendar"
+                ? "Academic Calendar & Events"
+                : view === "faculty"
+                ? "Faculty Schedules"
+                : view === "attendance"
+                ? "Attendance Portal"
+                : view === "floor-plan" || view === "rooms"
+                ? "Building CAD Blueprint"
+                : view === "roomware"
+                ? "Roomware Maintenance"
+                : `${program} · Sem ${semester} (${currentYear.split(" ")[0]}) · Sec ${section}`}
+            </strong>
           </div>
           <div className="top-actions">
             <Button variant="outline" className="export-button" onClick={() => toast.success("Export queued", { description: "Your PDF timetable will be ready shortly." })}>
@@ -328,8 +346,47 @@ export default function Home() {
         <section className="schedule-section pt-6">
           <div className="section-heading flex flex-wrap items-center justify-between gap-4 mb-4">
             <div>
-              <div className="eyebrow"><span className="section-number">SCHEDULE</span> INSTITUTIONAL MASTER TIMETABLE</div>
-              <h2>Timetable <span>matrix</span></h2>
+              <div className="eyebrow">
+                <span className="section-number">
+                  {view === "calendar"
+                    ? "EVENTS"
+                    : view === "faculty"
+                    ? "FACULTY"
+                    : view === "attendance"
+                    ? "PORTAL"
+                    : view === "floor-plan" || view === "rooms"
+                    ? "CAMPUS"
+                    : view === "roomware"
+                    ? "INFRA"
+                    : "SCHEDULE"}
+                </span>{" "}
+                {view === "calendar"
+                  ? "ACADEMIC CALENDAR & INSTITUTIONAL EVENTS"
+                  : view === "faculty"
+                  ? "PROFESSOR & INSTRUCTOR SCHEDULES"
+                  : view === "attendance"
+                  ? "HOURLY STUDENT ATTENDANCE PORTAL"
+                  : view === "floor-plan" || view === "rooms"
+                  ? "CAD ARCHITECTURAL BLUEPRINT"
+                  : view === "roomware"
+                  ? "CAMPUS ASSET & ROOMWARE WEAR TRACKER"
+                  : "INSTITUTIONAL MASTER TIMETABLE"}
+              </div>
+              <h2>
+                {view === "calendar" ? (
+                  <>Academic <span>Calendar</span></>
+                ) : view === "faculty" ? (
+                  <>Faculty <span>Timetable</span></>
+                ) : view === "attendance" ? (
+                  <>Attendance <span>Portal</span></>
+                ) : view === "floor-plan" || view === "rooms" ? (
+                  <>Floor Plan <span>CAD Blueprint</span></>
+                ) : view === "roomware" ? (
+                  <>Roomware <span>Wear & Tear</span></>
+                ) : (
+                  <>Timetable <span>matrix</span></>
+                )}
+              </h2>
             </div>
 
             {/* Displayed larger, neater, and positioned at the right most corner */}
@@ -448,6 +505,19 @@ export default function Home() {
 
           {view === "conflicts" ? (
             <ConflictReport />
+          ) : view === "calendar" ? (
+            <AcademicCalendarPanel
+              onNavigateToView={(targetView, param) => {
+                if (targetView === "floor-plan" && param) {
+                  handleLocateRoomOnCAD(param);
+                } else {
+                  handleSetView(targetView as View);
+                  if (param && targetView === "student") {
+                    setQuery(param);
+                  }
+                }
+              }}
+            />
           ) : view === "attendance" ? (
             canAccessAttendance ? (
               <AttendancePortalPanel
@@ -840,6 +910,8 @@ export default function Home() {
             if (param) setQuery(param);
           } else if (targetView === "roomware") {
             handleSetView("roomware");
+          } else if (targetView === "calendar") {
+            handleSetView("calendar");
           }
         }}
       />

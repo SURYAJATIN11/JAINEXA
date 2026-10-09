@@ -14,7 +14,8 @@ import {
   ChevronRight,
   Wrench,
   Sparkles,
-  LogOut
+  LogOut,
+  CalendarRange
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -27,6 +28,7 @@ import { loadRoomwareIssues, subscribeToRoomwareChanges } from "@/lib/roomwareSt
 export type NavItemKey =
   | "student"
   | "faculty"
+  | "calendar"
   | "ai-copilot"
   | "attendance"
   | "admin"
@@ -99,6 +101,11 @@ export function AppSidebar({
       return;
     }
 
+    if (key === "calendar") {
+      onNavigate("calendar");
+      return;
+    }
+
     onNavigate(key);
   };
 
@@ -118,6 +125,14 @@ export function AppSidebar({
       hasLock: false,
       hasExternal: false,
       tooltip: "Individual Professor & Faculty Schedules"
+    },
+    {
+      key: "calendar" as NavItemKey,
+      label: "Academic Calendar",
+      icon: CalendarRange,
+      hasLock: false,
+      hasExternal: false,
+      tooltip: "Interactive Academic Calendar & Campus Timetable Events"
     },
     {
       key: "ai-copilot" as NavItemKey,
