@@ -196,6 +196,26 @@ export function saveAllFaculty(faculty: FacultyAuthRecord[]): void {
   }
 }
 
+export function subscribeToFacultyChanges(callback: (faculty: FacultyAuthRecord[]) => void): () => void {
+  const handler = (e: Event) => {
+    const custom = e as CustomEvent<FacultyAuthRecord[]>;
+    callback(custom.detail || loadAllFaculty());
+  };
+  window.addEventListener("campus_ledger_faculty_updated", handler);
+
+  const storageHandler = (e: StorageEvent) => {
+    if (e.key === FACULTY_STORAGE_KEY) {
+      callback(loadAllFaculty());
+    }
+  };
+  window.addEventListener("storage", storageHandler);
+
+  return () => {
+    window.removeEventListener("campus_ledger_faculty_updated", handler);
+    window.removeEventListener("storage", storageHandler);
+  };
+}
+
 export function addFacultyRecord(newFaculty: FacultyAuthRecord): { success: boolean; faculty: FacultyAuthRecord; error?: string } {
   const current = loadAllFaculty();
   const normPhone = newFaculty.phone.replace(/[^0-9]/g, "").slice(-10);

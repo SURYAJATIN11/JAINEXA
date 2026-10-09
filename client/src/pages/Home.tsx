@@ -71,8 +71,6 @@ const seedSessions: Session[] = [
 ];
 
 function getSessions(view: View, sessions: Session[]) {
-  if (view === "faculty") return sessions.filter((s) => s.faculty.includes("Anil") || s.faculty.includes("Kabir") || s.faculty.includes("Meera"));
-  if (view === "rooms") return sessions.filter((s) => s.room.includes("A-204") || s.room.includes("LAB") || s.room.includes("204"));
   return sessions;
 }
 

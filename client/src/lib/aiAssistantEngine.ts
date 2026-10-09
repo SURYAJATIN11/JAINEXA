@@ -11,6 +11,7 @@ import {
 import { CAMPUS_FLOORS, BuildingRoom, findBuildingRoomByCodeOrName } from "@/data/floorPlanData";
 import { OFFICIAL_CSE_GEN_3_F_SESSIONS } from "@/lib/timetableStore";
 import { User } from "@/contexts/AuthContext";
+import { loadAllFaculty } from "@/data/facultyAuthData";
 
 export interface SessionItem {
   day: string;
@@ -769,6 +770,26 @@ The designated Class Teacher for **${studentBatch.program} Sem ${studentBatch.se
   }
 
   // 9. FACULTY SEARCH / FACULTY TIMETABLE LOOKUP
+  const registered = loadAllFaculty();
+  const matchedRegistered = registered.find((f) => {
+    const fn = f.name.toLowerCase();
+    return q.includes(fn) || fn.split(" ").some((part) => part.length > 3 && q.includes(part));
+  });
+
+  if (matchedRegistered) {
+    return {
+      id: crypto.randomUUID(),
+      sender: "assistant",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      text: `### 👨‍🏫 Faculty Profile: ${matchedRegistered.name}
+- 🏛️ **Department:** ${matchedRegistered.department || "Academic Department"}
+- 🎖️ **Designation:** ${matchedRegistered.designation}
+- 📱 **Registered Phone:** \`${matchedRegistered.phone}\`
+- 🔑 **Special Security Code:** \`${matchedRegistered.specialCode}\`
+- ✅ **Status:** Active Registered University Faculty (Available in Timetable Engine).`,
+    };
+  }
+
   const matchedFaculty = collegeFacultyNames.find((name) => {
     const nameOnly = name.split(" - ")[0].toLowerCase();
     return q.includes(nameOnly.toLowerCase()) || nameOnly.split(" ").some((part) => part.length > 3 && q.includes(part));

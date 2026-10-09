@@ -43,6 +43,23 @@ import {
   subscribeToAttendance,
   AttendanceSubmission
 } from "@/lib/attendanceStore";
+import {
+  loadAllFaculty,
+  subscribeToFacultyChanges,
+  type FacultyAuthRecord
+} from "@/data/facultyAuthData";
+import { loadClassSchedule } from "@/lib/timetableStore";
+
+export interface SearchableFacultyItem {
+  key: string;
+  name: string;
+  displayName: string;
+  designation: string;
+  department: string;
+  phone?: string;
+  specialCode?: string;
+  isRegistered: boolean;
+}
 
 const FEATURED_FACULTY = [
   "Dr. Kamlesh Tiwari - Professor (HOD CSE)",
@@ -122,12 +139,86 @@ export default function FacultyTimetablePanel({
   // All class teachers
   const classTeachers = useMemo(() => getAllClassTeachers(), []);
 
+  const [registeredFaculty, setRegisteredFaculty] = useState<FacultyAuthRecord[]>(() => loadAllFaculty());
+
+  useEffect(() => {
+    const unsub = subscribeToFacultyChanges((updated) => {
+      setRegisteredFaculty(updated);
+    });
+    return unsub;
+  }, []);
+
+  // Combined master faculty directory: Custom added faculty + College base faculty
+  const allFacultyList = useMemo<SearchableFacultyItem[]>(() => {
+    const registeredItems: SearchableFacultyItem[] = registeredFaculty.map((f) => ({
+      key: `${f.name} - ${f.designation}${f.department ? ` (${f.department})` : ""}`,
+      name: f.name,
+      displayName: `${f.name} - ${f.designation}${f.department ? ` (${f.department})` : ""}`,
+      designation: f.designation,
+      department: f.department || "Academic Department",
+      phone: f.phone,
+      specialCode: f.specialCode,
+      isRegistered: true,
+    }));
+
+    const registeredNamesLower = new Set(registeredFaculty.map((f) => f.name.toLowerCase().trim()));
+
+    const staticItems: SearchableFacultyItem[] = collegeFacultyNames
+      .filter((n) => {
+        const cleanName = n.split(" - ")[0].toLowerCase().trim();
+        return !registeredNamesLower.has(cleanName);
+      })
+      .map((name) => {
+        const parts = name.split(" - ");
+        return {
+          key: name,
+          name: parts[0].trim(),
+          displayName: name,
+          designation: parts[1]?.trim() || "Faculty",
+          department: "University Faculty",
+          isRegistered: false,
+        };
+      });
+
+    return [...registeredItems, ...staticItems];
+  }, [registeredFaculty]);
+
   // Filtered faculty list for autocomplete search
   const filteredFaculty = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return collegeFacultyNames.slice(0, 15);
-    return collegeFacultyNames.filter((name) => name.toLowerCase().includes(q)).slice(0, 20);
-  }, [searchQuery]);
+    if (!q) return allFacultyList.slice(0, 15);
+    return allFacultyList.filter((item) => {
+      return (
+        item.displayName.toLowerCase().includes(q) ||
+        item.name.toLowerCase().includes(q) ||
+        item.department.toLowerCase().includes(q) ||
+        item.designation.toLowerCase().includes(q) ||
+        (item.phone && item.phone.includes(q)) ||
+        (item.specialCode && item.specialCode.toLowerCase().includes(q))
+      );
+    }).slice(0, 30);
+  }, [searchQuery, allFacultyList]);
+
+  // Active registered record if current selection is an added faculty
+  const activeFacultyRecord = useMemo(() => {
+    const clean = selectedFaculty.split(" - ")[0].trim().toLowerCase();
+    return registeredFaculty.find(
+      (f) => f.name.toLowerCase().trim() === clean || selectedFaculty.toLowerCase().includes(f.name.toLowerCase().trim())
+    );
+  }, [selectedFaculty, registeredFaculty]);
+
+  // Check any published sessions for this faculty across active schedules
+  const dynamicFacultySessions = useMemo(() => {
+    const clean = (activeFacultyRecord?.name || selectedFaculty.split(" - ")[0]).trim().toLowerCase();
+    try {
+      const secF = loadClassSchedule("CSE-GEN", "3", "F").published;
+      const dsA = loadClassSchedule("CSE-DS", "3", "A").published;
+      const all = [...secF, ...dsA];
+      return all.filter((s) => s.faculty.toLowerCase().includes(clean));
+    } catch {
+      return [];
+    }
+  }, [selectedFaculty, activeFacultyRecord]);
 
   // Hourly attendance submissions recorded by the selected faculty
   const [facultySubmissions, setFacultySubmissions] = useState<AttendanceSubmission[]>(() =>
@@ -210,6 +301,23 @@ export default function FacultyTimetablePanel({
 
   // Compute workload statistics
   const stats = useMemo(() => {
+    if (dynamicFacultySessions.length > 0) {
+      let lab = 0;
+      let lecture = 0;
+      const batches = new Set<string>();
+      dynamicFacultySessions.forEach((s) => {
+        if (s.type === "Lab") lab++;
+        else lecture++;
+        batches.add(s.batch);
+      });
+      return {
+        totalSlots: dynamicFacultySessions.length,
+        labSlots: lab,
+        lectureSlots: lecture,
+        uniqueBatches: batches.size
+      };
+    }
+
     if (!facultyData?.grid) return { totalSlots: 0, labSlots: 0, lectureSlots: 0, uniqueBatches: 0 };
     let total = 0;
     let lab = 0;
@@ -239,7 +347,7 @@ export default function FacultyTimetablePanel({
       lectureSlots: lecture,
       uniqueBatches: batches.size
     };
-  }, [facultyData]);
+  }, [facultyData, dynamicFacultySessions]);
 
   const handleSelectFaculty = (name: string) => {
     setSelectedFaculty(name);
@@ -276,7 +384,7 @@ export default function FacultyTimetablePanel({
               Faculty <em className="text-[#e3a62f] not-italic font-serif">Timetable & Allocations</em>
             </h2>
             <p className="text-xs text-[#716e75] mt-1">
-              Search any of the <strong>205 verified faculty members</strong> to view their weekly timetable schedule, assigned classrooms, laboratories, and course workloads.
+              Search any of the <strong>{allFacultyList.length} verified faculty members</strong> to view their weekly timetable schedule, assigned classrooms, laboratories, and course workloads.
             </p>
           </div>
 
@@ -336,20 +444,31 @@ export default function FacultyTimetablePanel({
                   />
                   <div className="absolute top-11 left-0 right-0 z-30 bg-[#fffdf7] border border-[#d8d3c5] rounded-md shadow-2xl max-h-72 overflow-y-auto divide-y divide-[#eeebe3]">
                     {filteredFaculty.length > 0 ? (
-                      filteredFaculty.map((name) => (
+                      filteredFaculty.map((item) => (
                         <button
-                          key={name}
+                          key={item.key}
                           type="button"
-                          onClick={() => handleSelectFaculty(name)}
+                          onClick={() => handleSelectFaculty(item.key)}
                           className="w-full text-left px-3.5 py-2.5 text-xs hover:bg-[#f4efe3] transition flex items-center justify-between group"
                         >
                           <div>
-                            <strong className="block text-[#27262c] group-hover:text-[#33409a]">
-                              {name}
-                            </strong>
-                            <span className="text-[10px] text-[#7a767f]">
-                              {getFacultyAssignments(name).length} Course Assignments
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <strong className="block text-[#27262c] group-hover:text-[#33409a]">
+                                {item.name}
+                              </strong>
+                              {item.isRegistered && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#eef0fb] text-[#33409a] border border-[#d3d8f5]">
+                                  Active Faculty
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 text-[10px] text-[#7a767f] mt-0.5">
+                              <span>{item.designation}</span>
+                              {item.department && <span>· {item.department}</span>}
+                              {item.specialCode && (
+                                <span className="font-mono text-[#33409a] font-semibold">· Code: {item.specialCode}</span>
+                              )}
+                            </div>
                           </div>
                           <ChevronRight size={13} className="text-[#a4a0a9] group-hover:text-[#33409a]" />
                         </button>
@@ -399,20 +518,32 @@ export default function FacultyTimetablePanel({
           <div className="p-4 sm:p-5 bg-[#252b67] text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-full bg-[#e3a62f] text-[#252b67] font-serif font-bold text-lg grid place-items-center shrink-0 shadow-inner">
-                {selectedFaculty.charAt(0)}
+                {(activeFacultyRecord?.name || selectedFaculty).charAt(0)}
               </div>
               <div>
                 <h3 className="font-serif text-xl sm:text-2xl text-white m-0 leading-tight">
-                  {selectedFaculty}
+                  {activeFacultyRecord?.name || selectedFaculty}
                 </h3>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-[#c5c9e6]">
                   <span className="bg-[#384189] px-2 py-0.5 rounded text-[10px] text-[#e3a62f] font-semibold tracking-wide">
-                    VERIFIED FACULTY REGISTER
+                    {activeFacultyRecord ? "ACTIVE REGISTERED FACULTY" : "VERIFIED FACULTY REGISTER"}
                   </span>
                   <span>·</span>
-                  <span>{assignments.length} Course Offerings</span>
+                  <span>{activeFacultyRecord?.designation || selectedFaculty.split(" - ")[1] || "Faculty"}</span>
+                  {activeFacultyRecord?.department && (
+                    <>
+                      <span>·</span>
+                      <span>{activeFacultyRecord.department}</span>
+                    </>
+                  )}
+                  {activeFacultyRecord?.specialCode && (
+                    <>
+                      <span>·</span>
+                      <span className="font-mono text-[#e3a62f] font-bold">Passcode: {activeFacultyRecord.specialCode}</span>
+                    </>
+                  )}
                   <span>·</span>
-                  <span>{stats.uniqueBatches} Class Batches</span>
+                  <span>{stats.totalSlots} Scheduled Classes</span>
                 </div>
               </div>
             </div>
@@ -521,7 +652,22 @@ export default function FacultyTimetablePanel({
               </thead>
               <tbody className="divide-y divide-[#ede9dd]">
                 {DAYS.map((day) => {
-                  const dayRow = (facultyData?.grid as any)?.[day] || {};
+                  let dayRow = (facultyData?.grid as any)?.[day] || {};
+                  if (dynamicFacultySessions.length > 0) {
+                    const daySessions = dynamicFacultySessions.filter(
+                      (s) => s.day === day || s.day === DAY_FULL[day]
+                    );
+                    if (daySessions.length > 0) {
+                      dayRow = { ...dayRow };
+                      daySessions.forEach((s) => {
+                        dayRow[String(s.slot + 1)] = {
+                          text: `${s.subject} (${s.code}) in ${s.room}`,
+                          type: s.type === "Lab" ? "lab" : "lecture",
+                          colspan: 1
+                        };
+                      });
+                    }
+                  }
 
                   return (
                     <tr key={day} className="h-[96px] hover:bg-[#faf8f2]/40 transition-colors">
