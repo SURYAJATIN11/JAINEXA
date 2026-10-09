@@ -4,11 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   ShieldAlert,
-  UsersRound,
-  ShieldCheck,
   ArrowLeft,
-  KeyRound,
-  CheckCircle2,
   Lock
 } from "lucide-react";
 
@@ -21,7 +17,7 @@ export default function AttendanceAccessRestricted({
   onBackToTimetable,
   onOpenLoginModal
 }: AttendanceAccessRestrictedProps) {
-  const { user, switchRole, quickLogin } = useAuth();
+  const { user } = useAuth();
 
   return (
     <div className="py-12 px-4 max-w-2xl mx-auto text-center">
@@ -57,49 +53,15 @@ export default function AttendanceAccessRestricted({
         )}
 
         <div className="space-y-3 max-w-md mx-auto">
-          <div className="text-[11px] font-bold text-[#88848d] uppercase tracking-wider mb-2">
-            Switch to an Authorized Account to Gain Access:
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <Button
-              onClick={() => switchRole("faculty")}
-              className="h-10 text-xs bg-[#e3a62f] hover:bg-[#cf8e18] text-[#252b67] font-bold gap-2 shadow-sm border border-[#cf921d]"
-            >
-              <UsersRound size={15} />
-              <span>Login as Faculty</span>
-            </Button>
-
-            <Button
-              onClick={() => switchRole("admin")}
-              className="h-10 text-xs bg-[#252b67] hover:bg-[#323985] text-white font-bold gap-2 shadow-sm"
-            >
-              <ShieldCheck size={15} className="text-[#e3a62f]" />
-              <span>Login as Admin</span>
-            </Button>
-          </div>
-
-          {onOpenLoginModal && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onOpenLoginModal}
-              className="w-full text-xs h-9 border-[#d8d3c5] text-[#555259] gap-1.5 mt-2"
-            >
-              <KeyRound size={13} />
-              <span>Sign in with other Faculty / Admin ID</span>
-            </Button>
-          )}
-
           {onBackToTimetable && (
-            <div className="pt-3">
+            <div className="pt-2">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={onBackToTimetable}
-                className="text-xs text-[#757279] hover:text-[#252b67] gap-1.5"
+                className="w-full text-xs h-10 bg-[#252b67] text-white hover:bg-[#323985] gap-2 font-semibold shadow-sm"
               >
-                <ArrowLeft size={13} />
+                <ArrowLeft size={14} />
                 <span>Return to Batch Timetable</span>
               </Button>
             </div>

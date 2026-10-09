@@ -23,6 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 import { loadRoomwareIssues, subscribeToRoomwareChanges } from "@/lib/roomwareStore";
 
 export type NavItemKey =
@@ -79,10 +80,27 @@ export function AppSidebar({
     }
 
     if (key === "admin") {
+      if (!canAccessAdminStudio) {
+        toast.error("Access Restricted", {
+          description: "Timetable Administration Studio is restricted exclusively to Master Admins."
+        });
+        return;
+      }
       if (window.location.pathname === "/admin") {
         return;
       }
       window.open("/admin", "_blank");
+      return;
+    }
+
+    if (key === "attendance") {
+      if (!canAccessAttendance) {
+        toast.error("Access Restricted", {
+          description: "Attendance Portal is confidential and restricted exclusively to Faculty & Administrators."
+        });
+        return;
+      }
+      onNavigate("attendance");
       return;
     }
 

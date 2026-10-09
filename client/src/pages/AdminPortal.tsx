@@ -229,9 +229,8 @@ export default function AdminPortal() {
     return (
       <AdminAccessRestricted
         user={user}
-        onSwitchToAdmin={() => {
-          switchRole("admin");
-          reloadCurrentSchedule();
+        onOpenLoginModal={() => {
+          logout();
         }}
       />
     );

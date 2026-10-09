@@ -14,21 +14,13 @@ import { Link } from "wouter";
 
 interface AdminAccessRestrictedProps {
   user?: User | null;
-  onSwitchToAdmin?: () => void;
   onOpenLoginModal?: () => void;
 }
 
 export default function AdminAccessRestricted({
   user,
-  onSwitchToAdmin,
   onOpenLoginModal
 }: AdminAccessRestrictedProps) {
-  const { switchRole } = useAuth();
-
-  const handleAdminSwitch = () => {
-    if (onSwitchToAdmin) onSwitchToAdmin();
-    else switchRole("admin");
-  };
 
   return (
     <div className="min-h-screen bg-[#f7f5ef] flex flex-col justify-center items-center p-4 relative font-sans">
@@ -78,22 +70,13 @@ export default function AdminAccessRestricted({
           )}
 
           <div className="space-y-3 max-w-sm mx-auto">
-            <Button
-              onClick={handleAdminSwitch}
-              className="w-full h-10 text-xs bg-[#252b67] hover:bg-[#343b7e] text-white font-bold gap-2 shadow-md"
-            >
-              <ShieldCheck size={16} className="text-[#e3a62f]" />
-              <span>Authenticate with Administrator Account</span>
-            </Button>
-
             {onOpenLoginModal && (
               <Button
-                variant="outline"
                 size="sm"
                 onClick={onOpenLoginModal}
-                className="w-full text-xs h-9 border-[#d8d3c5] text-[#555259] gap-1.5"
+                className="w-full text-xs h-10 bg-[#252b67] hover:bg-[#343b7e] text-white font-bold gap-2 shadow-md"
               >
-                <KeyRound size={13} />
+                <KeyRound size={14} className="text-[#e3a62f]" />
                 <span>Enter Admin Username & Password</span>
               </Button>
             )}
