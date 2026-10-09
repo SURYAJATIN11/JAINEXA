@@ -21,7 +21,8 @@ import {
   Check,
   ExternalLink,
   ShieldCheck,
-  Info
+  Info,
+  Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -227,6 +228,13 @@ export default function AcademicCalendarPanel({ onNavigateToView }: AcademicCale
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      toast.error("Access Restricted", {
+        description: "Only administrators have permission to schedule or edit academic calendar events."
+      });
+      return;
+    }
+
     if (!newEventTitle.trim()) {
       toast.error("Please provide an event title");
       return;
@@ -259,6 +267,12 @@ export default function AcademicCalendarPanel({ onNavigateToView }: AcademicCale
   };
 
   const handleDeleteEvent = (id: string, title: string) => {
+    if (!isAdmin) {
+      toast.error("Access Restricted", {
+        description: "Only administrators can remove academic calendar events."
+      });
+      return;
+    }
     const ok = deleteAcademicEvent(id);
     if (ok) {
       toast.success("Event deleted", { description: `"${title}" removed from academic calendar.` });
@@ -312,14 +326,21 @@ export default function AcademicCalendarPanel({ onNavigateToView }: AcademicCale
               </button>
             </div>
 
-            {/* Add Event Button (for Admin & Faculty) */}
-            <Button
-              onClick={() => setIsAddModalOpen(true)}
-              className="h-9 px-3.5 bg-[#e3a62f] hover:bg-[#cf9424] text-[#252b67] font-bold text-xs gap-1.5 shadow-sm"
-            >
-              <Plus size={14} />
-              <span>Add Event</span>
-            </Button>
+            {/* Add Event Button (Strictly for Admins; Students and Faculty have view-only access) */}
+            {isAdmin ? (
+              <Button
+                onClick={() => setIsAddModalOpen(true)}
+                className="h-9 px-3.5 bg-[#e3a62f] hover:bg-[#cf9424] text-[#252b67] font-bold text-xs gap-1.5 shadow-sm"
+              >
+                <Plus size={14} />
+                <span>Add Event</span>
+              </Button>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#ede9dd] border border-[#dbd6c9] text-[#6a666e] text-xs select-none">
+                <Lock size={12} className="text-[#88848c]" />
+                <span className="font-semibold text-[11px]">View-Only (Admin Managed)</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -622,17 +643,19 @@ export default function AcademicCalendarPanel({ onNavigateToView }: AcademicCale
                   <p className="text-[11px] text-[#78757d] max-w-xs mx-auto">
                     Regular academic lectures and scheduled laboratory sessions follow the normal university timetable on this day.
                   </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setNewEventDate(selectedDateStr);
-                      setIsAddModalOpen(true);
-                    }}
-                    className="text-xs font-semibold text-[#33409a] border-[#33409a]/30 hover:bg-[#eef0fb] mt-1"
-                  >
-                    + Schedule Event on this Day
-                  </Button>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setNewEventDate(selectedDateStr);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="text-xs font-semibold text-[#33409a] border-[#33409a]/30 hover:bg-[#eef0fb] mt-1"
+                    >
+                      + Schedule Event on this Day
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -761,8 +784,8 @@ export default function AcademicCalendarPanel({ onNavigateToView }: AcademicCale
         </div>
       )}
 
-      {/* Add Event Dialog Modal */}
-      {isAddModalOpen && (
+      {/* Add Event Dialog Modal (Strictly for Authorized Admins) */}
+      {isAddModalOpen && isAdmin && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#fffdf7] border border-[#ded9cb] rounded-xl shadow-2xl max-w-lg w-full overflow-hidden my-8">
             <div className="p-4 sm:p-5 bg-[#252b67] text-white flex items-center justify-between">
