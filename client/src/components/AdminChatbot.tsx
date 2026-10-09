@@ -372,7 +372,7 @@ export function AdminChatbot({
   onClassSwitch,
 }: AdminChatbotProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isWide, setIsWide] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
@@ -420,10 +420,10 @@ export function AdminChatbot({
   }, [messages]);
 
   useEffect(() => {
-    if (isOpen && !isMinimized) {
+    if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [isOpen, isMinimized]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (mode === "idle") {
@@ -1729,107 +1729,118 @@ export function AdminChatbot({
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.08 }}
+            whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-5 right-5 z-50 w-13 h-13 rounded-full bg-[#0a1e3a] text-white shadow-2xl flex items-center justify-center cursor-pointer border-2 border-[#e5a00d] hover:bg-[#142e54] transition-all"
-            title="Open Admin AI Controller"
+            className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-[#0a1e3a] text-white shadow-2xl border-2 border-[#e5a00d] hover:bg-[#142e54] transition-all cursor-pointer group"
+            title="Open Admin AI Controller (Side Panel)"
           >
-            <Bot className="w-6 h-6 text-[#faf8ef]" />
-            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-[#e5a00d] rounded-full border-2 border-white animate-pulse" />
+            <div className="relative flex items-center justify-center">
+              <Bot className="w-5 h-5 text-[#e5a00d]" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#0a1e3a] animate-pulse" />
+            </div>
+            <span className="font-bold text-xs tracking-wide">Admin AI Controller</span>
+            <span className="text-[10px] bg-[#e5a00d] text-[#0a1e3a] font-black px-1.5 py-0.5 rounded uppercase">Side</span>
           </motion.button>
         )}
       </AnimatePresence>
 
-      {/* ─── Floating Chat Panel ─── */}
+      {/* ─── Right-Side Chat Panel & Backdrop ─── */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 40, scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 350, damping: 28 }}
-            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragOver(false);
-              const file = e.dataTransfer.files?.[0];
-              if (file) handleImageFile(file);
-            }}
-            onPaste={handlePaste}
-            className="fixed bottom-5 right-5 z-50 flex flex-col shadow-2xl border border-slate-300 rounded-2xl bg-white overflow-hidden relative"
-            style={{
-              width: isMinimized ? "300px" : "420px",
-              height: isMinimized ? "auto" : "580px",
-              maxHeight: "88vh",
-            }}
-          >
-            {/* Hidden File Input for Picture Upload */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageFile(file);
-                e.target.value = "";
-              }}
+          <>
+            {/* Backdrop click to dismiss */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 z-50 bg-black/35 backdrop-blur-[1px]"
             />
 
-            {/* Drag & Drop Visual Overlay */}
-            {isDragOver && (
-              <div className="absolute inset-0 bg-[#0a1e3a]/90 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-white p-5 text-center border-2 border-dashed border-[#e5a00d] rounded-2xl pointer-events-none">
-                <UploadCloud className="w-12 h-12 text-[#e5a00d] mb-2 animate-bounce" />
-                <p className="font-bold text-sm">Drop Student List Picture Here</p>
-                <p className="text-[11px] text-slate-200 mt-1">Automatic AI OCR will scan names & USNs</p>
-              </div>
-            )}
-            {/* ── Header ── */}
-            <div className="bg-[#0a1e3a] text-white px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/60 flex items-center justify-center">
-                  <Bot className="w-4.5 h-4.5 text-[#e5a00d]" />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 340, damping: 30 }}
+              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+              onDragLeave={() => setIsDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleImageFile(file);
+              }}
+              onPaste={handlePaste}
+              className={`fixed top-0 right-0 bottom-0 z-50 flex flex-col shadow-2xl border-l border-slate-300 bg-white overflow-hidden h-full w-full ${
+                isWide ? "sm:w-[620px] md:w-[680px]" : "sm:w-[480px] md:w-[520px]"
+              } transition-[width] duration-200`}
+            >
+              {/* Hidden File Input for Picture Upload */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImageFile(file);
+                  e.target.value = "";
+                }}
+              />
+
+              {/* Drag & Drop Visual Overlay */}
+              {isDragOver && (
+                <div className="absolute inset-0 bg-[#0a1e3a]/90 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-white p-5 text-center border-2 border-dashed border-[#e5a00d] rounded-none pointer-events-none">
+                  <UploadCloud className="w-12 h-12 text-[#e5a00d] mb-2 animate-bounce" />
+                  <p className="font-bold text-sm">Drop Student List Picture Here</p>
+                  <p className="text-[11px] text-slate-200 mt-1">Automatic AI OCR will scan names & USNs</p>
                 </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-bold tracking-wide leading-none">Admin AI Controller</p>
-                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              )}
+              {/* ── Header ── */}
+              <div className="bg-[#0a1e3a] text-white px-4 py-3 flex items-center justify-between shrink-0 shadow-sm border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[#e5a00d]/20 border border-[#e5a00d]/60 flex items-center justify-center">
+                    <Bot className="w-4.5 h-4.5 text-[#e5a00d]" />
                   </div>
-                  <p className="text-[10px] text-slate-300 mt-1 leading-none font-medium">
-                    {program} · Sem {semester} · Sec {section}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold tracking-wide leading-none">Admin AI Controller</p>
+                      <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                    </div>
+                    <p className="text-[10px] text-slate-300 mt-1 leading-none font-medium">
+                      {program} · Sem {semester} · Sec {section}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={clearHistory}
+                    className="p-1.5 rounded hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer transition-colors"
+                    title="Clear chat"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setIsWide(!isWide)}
+                    className="p-1.5 rounded hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer transition-colors"
+                    title={isWide ? "Normal width" : "Widen side panel"}
+                  >
+                    {isWide ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="p-1.5 rounded hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer transition-colors"
+                    title="Close side panel"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={clearHistory}
-                  className="p-1.5 rounded hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer transition-colors"
-                  title="Clear chat"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setIsMinimized(!isMinimized)}
-                  className="p-1.5 rounded hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer transition-colors"
-                  title={isMinimized ? "Expand" : "Minimize"}
-                >
-                  {isMinimized ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
-                </button>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-1.5 rounded hover:bg-white/15 text-slate-300 hover:text-white cursor-pointer transition-colors"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* ── Body ── */}
-            {!isMinimized && (
+              {/* ── Body ── */}
               <>
                 {/* Active Wizard Mode Banner */}
                 {mode !== "idle" && (
@@ -2058,8 +2069,8 @@ export function AdminChatbot({
                   </div>
                 </div>
               </>
-            )}
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </>
